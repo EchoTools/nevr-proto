@@ -7,6 +7,8 @@ syntax = "proto3";
 
 package gameservice.v1;
 
+import "gameservice/v1/friends.proto";
+import "gameservice/v1/party.proto";
 import "google/protobuf/timestamp.proto";
 import "telemetry/v1/telemetry.proto";
 
@@ -128,6 +130,50 @@ message Envelope {
     SNSEarlyQuitFeatureFlagsMessage early_quit_feature_flags = 56;
     // Notify a player of their early quit penalty state change.
     SNSEarlyQuitUpdateNotificationMessage early_quit_update_notification = 57;
+
+    // Party system messages (SNS-based, via CNSRADParty in pnsrad.dll).
+
+    SNSPartyCreateRequestMessage party_create_request = 58;
+    SNSPartyCreateSuccessMessage party_create_success = 59;
+    SNSPartyCreateFailureMessage party_create_failure = 60;
+    SNSPartyJoinRequestMessage party_join_request = 61;
+    SNSPartyJoinSuccessMessage party_join_success = 62;
+    SNSPartyJoinFailureMessage party_join_failure = 63;
+    SNSPartyJoinNotifyMessage party_join_notify = 64;
+    SNSPartyLeaveRequestMessage party_leave_request = 65;
+    SNSPartyLeaveNotifyMessage party_leave_notify = 66;
+    SNSPartyKickRequestMessage party_kick_request = 67;
+    SNSPartyKickNotifyMessage party_kick_notify = 68;
+    SNSPartyPassOwnershipRequestMessage party_pass_ownership_request = 69;
+    SNSPartyPassNotifyMessage party_pass_notify = 70;
+    SNSPartySendInviteRequestMessage party_send_invite_request = 71;
+    SNSPartyRespondToInviteRequestMessage party_respond_to_invite_request = 72;
+    SNSPartyInviteNotifyMessage party_invite_notify = 73;
+    SNSPartyMemberUpdateMessage party_member_update = 74;
+    SNSPartyLockRequestMessage party_lock_request = 75;
+    SNSPartyUnlockRequestMessage party_unlock_request = 76;
+
+    // Friends system messages (SNS-based, via CNSRADFriends in pnsrad.dll).
+
+    SNSFriendListRequestMessage friend_list_request = 77;
+    SNSFriendListResponseMessage friend_list_response = 78;
+    SNSFriendSyncRequestMessage friend_sync_request = 79;
+    SNSFriendStatusNotifyMessage friend_status_notify = 80;
+    SNSFriendInviteRequestMessage friend_invite_request = 81;
+    SNSFriendInviteSuccessMessage friend_invite_success = 82;
+    SNSFriendInviteFailureMessage friend_invite_failure = 83;
+    SNSFriendInviteNotifyMessage friend_invite_notify = 84;
+    SNSFriendAcceptRequestMessage friend_accept_request = 85;
+    SNSFriendAcceptSuccessMessage friend_accept_success = 86;
+    SNSFriendAcceptFailureMessage friend_accept_failure = 87;
+    SNSFriendAcceptNotifyMessage friend_accept_notify = 88;
+    SNSFriendRejectRequestMessage friend_reject_request = 89;
+    SNSFriendRejectNotifyMessage friend_reject_notify = 90;
+    SNSFriendCancelRequestMessage friend_cancel_request = 91;
+    SNSFriendWithdrawnNotifyMessage friend_withdrawn_notify = 92;
+    SNSFriendRemoveRequestMessage friend_remove_request = 93;
+    SNSFriendRemoveResponseMessage friend_remove_response = 94;
+    SNSFriendRemoveNotifyMessage friend_remove_notify = 95;
   }
 }
 

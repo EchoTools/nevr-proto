@@ -1,0 +1,274 @@
+/**
+ * Party system SNS messages.
+ *
+ * Source: echovr-reconstruction src/pnsrad/Social/CNSRADParty.h,
+ *         echovr-social-re-answers.md Q1-Q3, Q9
+ *
+ * The party system is 100% SNS-message-based. CNSRADParty (pnsrad.dll)
+ * sends/receives these messages via CTcpBroadcaster. The game server
+ * translates between protobuf (Nakama) and binary wire format (client).
+ *
+ * Binary wire format details are in comments. The protobuf fields represent
+ * the logical data; the game server handles packing/unpacking.
+ */
+syntax = "proto3";
+
+package gameservice.v1;
+
+option csharp_namespace = "Nevr.Gameservice.V1";
+option go_package = "buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/gameservice/v1;gameservicev1";
+option java_multiple_files = true;
+option java_outer_classname = "PartyProto";
+option java_package = "com.echotools.nevr.gameservice.v1";
+
+// ============================================================================
+// Party Request Messages (client → server)
+// ============================================================================
+
+// Create a new party.
+//
+// Binary wire: 0x28 fixed (SNSPartyPayload) + variable (party_json + member_json)
+// Hash: 0x0b7bd21332523994 (shared with SNSPartyMemberUpdate)
+// Sender: CNSRADParty::CreateInternal (pnsrad.dll)
+// Source: echovr-social-re-answers Q9
+message SNSPartyCreateRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // Maximum number of party members.
+  // Binary: (max_members - 1) & 0x07 in packed_field bits[2:0]
+  uint32 max_members = 2;
+  // Party-level JSON data (CJson::EncodeToCompact). May be empty.
+  string party_json = 3;
+  // Initial member JSON data for the creator. May be empty.
+  string member_json = 4;
+}
+
+// Join an existing party.
+//
+// Binary wire: 0x28 fixed (SNSPartyPayload), routing_id = 0xFFFFFFFFFFFFFFFF
+// Hash: 0x1bbcb7e810af4620 (shared with SNSFriendAcceptRequest)
+// Sender: CNSRADParty::JoinInternal @ pnsrad.dll 0x18007fe50
+// Source: CNSRADParty.h:25, SNSMessageTypes.h:1217
+message SNSPartyJoinRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // Party ID to join.
+  uint64 party_id = 2;
+}
+
+// Leave the current party.
+//
+// Binary wire: 0x28 fixed (SNSPartyPayload)
+// Hash: 0x78908988b7fe6db4 (shared with friend Cancel/Reject/Remove)
+// Sender: CNSRADParty::LeaveInternal @ pnsrad.dll 0x180080610
+// Source: CNSRADParty.h:26, SNSMessageTypes.h:1222
+message SNSPartyLeaveRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Kick a member from the party. Host only.
+//
+// Binary wire: 0x30 fixed (SNSPartyTargetPayload)
+// Hash: 0xff02bf488e77bcba
+// Sender: CNSRADParty::Kick @ pnsrad.dll 0x180080770
+// Source: CNSRADParty.h:27, SNSMessageTypes.h:1226
+message SNSPartyKickRequestMessage {
+  // Session login UUID of the requester (must be host).
+  string login_session_id = 1;
+  // UUID of the member to kick.
+  string target_user_uuid = 2;
+  // Kick reason parameter.
+  // Binary: SNSPartyTargetPayload.param at +0x28
+  uint32 param = 3;
+}
+
+// Transfer party ownership to another member. Host only.
+//
+// Binary wire: 0x30 fixed (SNSPartyTargetPayload)
+// Hash: 0x352f9d0e16001420
+// Sender: CNSRADParty::Pass @ pnsrad.dll 0x180080880
+// Source: CNSRADParty.h:28, SNSMessageTypes.h:1230
+message SNSPartyPassOwnershipRequestMessage {
+  // Session login UUID of the requester (must be host).
+  string login_session_id = 1;
+  // UUID of the member to transfer ownership to.
+  string target_user_uuid = 2;
+}
+
+// Respond to a party invite (accept or reject).
+//
+// Binary wire: 0x30 fixed (SNSPartyTargetPayload)
+// Hash: 0xeaf428c8a8a5cd2a
+// Sender: CNSRADParty::RespondToInvite @ pnsrad.dll 0x180080990
+// Source: CNSRADParty.h:29, SNSMessageTypes.h:1234
+message SNSPartyRespondToInviteRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // UUID of the invite sender.
+  string target_user_uuid = 2;
+  // Response parameter (accept/reject).
+  // Binary: SNSPartyTargetPayload.param at +0x28
+  uint32 param = 3;
+}
+
+// Send a party invite to another user.
+//
+// Binary wire: 0x28 fixed (SNSPartyPayload)
+// Hash: 0x7f0d7a28de3c6f70 (shared with SNSFriendInviteRequest)
+// Sender: CNSRADParty::SendInvite @ pnsrad.dll 0x180083cd0
+// Source: CNSRADParty.h:31, SNSMessageTypes.h:1243
+message SNSPartySendInviteRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // User ID of the invite target.
+  uint64 target_user_id = 2;
+}
+
+// Update party member data (shared state).
+//
+// Binary wire: 0x28 fixed + variable (serialized buffers with bitfield encoding)
+// Hash: 0x0b7bd21332523994 (shared with SNSPartyCreateRequest)
+// Sender: CNSRADParty::ShareData @ pnsrad.dll 0x180080b10
+// Source: CNSRADParty.h:30, SNSMessageTypes.h:1238
+message SNSPartyMemberUpdateMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // Raw variable data (game server passes through).
+  bytes data = 2;
+}
+
+// Lock the party (prevent new joins). Host only.
+//
+// Binary wire: 0x28 fixed (SNSPartyPayload)
+// Hash: derived at runtime from obfuscated string
+// Sender: CNSRADParty::SetJoinableInternal(0) @ pnsrad.dll 0x180087070
+// Source: CNSRADParty.h:33, SNSMessageTypes.h:1248
+message SNSPartyLockRequestMessage {
+  // Session login UUID of the requester (must be host).
+  string login_session_id = 1;
+}
+
+// Unlock the party (allow new joins). Host only.
+//
+// Binary wire: 0x28 fixed (SNSPartyPayload)
+// Hash: derived at runtime from "ZOlPrEfIxSNSPartyUnlockRequest"
+// Sender: CNSRADParty::SetJoinableInternal(1) @ pnsrad.dll 0x180087070
+// Source: CNSRADParty.h:33, SNSMessageTypes.h:1248
+message SNSPartyUnlockRequestMessage {
+  // Session login UUID of the requester (must be host).
+  string login_session_id = 1;
+}
+
+// ============================================================================
+// Party Response Messages (server → client)
+// ============================================================================
+
+// Party creation succeeded.
+//
+// Binary wire: 8 bytes fixed at STcpMsg+0x08 (party_id only)
+// Handler: CNSRADParty::CreateSuccessCB @ pnsrad.dll 0x180080dc0
+// Source: echovr-social-re-answers Q1
+message SNSPartyCreateSuccessMessage {
+  // Server-assigned party ID.
+  uint64 party_id = 1;
+}
+
+// Party creation failed.
+//
+// Source: Quest symbol SNSPartyCreateFailure (payload structure NOT reversed)
+message SNSPartyCreateFailureMessage {
+  // Raw payload (structure not yet reversed).
+  bytes data = 1;
+}
+
+// Successfully joined a party. Contains full party state.
+//
+// Binary wire: fixed (party_id + owner_id + packed_flags) +
+//   ZStd-compressed variable (member IDs + party JSON + CStringTable)
+// Handler: CNSRADParty::JoinSuccessCB @ pnsrad.dll 0x180084aa0
+// Source: echovr-social-re-answers Q2
+message SNSPartyJoinSuccessMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // Host/owner user ID.
+  uint64 owner_id = 2;
+  // Maximum number of members.
+  // Binary: packed_flags bits[2:0] (& 0x07)
+  uint32 max_members = 3;
+  // Whether the party is locked.
+  // Binary: packed_flags bit[15]
+  bool locked = 4;
+  // Party-level JSON data.
+  // Binary: party_json_size in packed_flags bits[14:6], data in variable payload
+  string party_json = 5;
+  // Current party members.
+  repeated SNSPartyMember members = 6;
+}
+
+// A party member entry within JoinSuccess.
+// Source: echovr-social-re-answers Q2
+message SNSPartyMember {
+  // Member's user ID.
+  // Binary: uint64 in member_ids array
+  uint64 user_id = 1;
+  // Member's display name.
+  // Binary: null-terminated string in CStringTable, max 35 chars (0x24 bytes)
+  string name = 2;
+  // Member's per-member JSON data.
+  // Binary: CJson encoded in CStringTable
+  string member_json = 3;
+}
+
+// Party join failed.
+//
+// Source: Quest symbol SNSPartyJoinFailure (payload structure NOT reversed)
+message SNSPartyJoinFailureMessage {
+  // Raw payload (structure not yet reversed).
+  bytes data = 1;
+}
+
+// Notification to existing party members that a new member joined.
+//
+// Binary wire: 16 bytes fixed (party_id + member_id) +
+//   variable (member_name\0 + member_json, not compressed)
+// Handler: CNSRADParty::JoinNotifyCB @ pnsrad.dll 0x180084980
+// Source: echovr-social-re-answers Q3
+message SNSPartyJoinNotifyMessage {
+  // Party ID (handler validates this matches current party).
+  uint64 party_id = 1;
+  // New member's user ID.
+  uint64 member_id = 2;
+  // New member's display name.
+  string member_name = 3;
+  // New member's per-member JSON data.
+  string member_json = 4;
+}
+
+// Notification that a member left the party.
+//
+// Source: Quest symbol SNSPartyLeaveNotify (payload structure NOT reversed)
+message SNSPartyLeaveNotifyMessage {
+  bytes data = 1;
+}
+
+// Notification that a member was kicked from the party.
+//
+// Source: Quest symbol SNSPartyKickNotify (payload structure NOT reversed)
+message SNSPartyKickNotifyMessage {
+  bytes data = 1;
+}
+
+// Notification that party ownership was transferred.
+//
+// Source: Quest symbol SNSPartyPassNotify (payload structure NOT reversed)
+message SNSPartyPassNotifyMessage {
+  bytes data = 1;
+}
+
+// Notification that a party invite was received.
+//
+// Source: Quest symbol SNSPartyInviteNotify (payload structure NOT reversed)
+message SNSPartyInviteNotifyMessage {
+  bytes data = 1;
+}
