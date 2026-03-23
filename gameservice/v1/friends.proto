@@ -1,0 +1,264 @@
+/**
+ * Friends system SNS messages.
+ *
+ * Source: echovr-reconstruction src/pnsrad/Social/CNSRADFriends.h,
+ *         echovr-social-re-answers Q4-Q8
+ *
+ * The friends system is 100% SNS-message-based. CNSRADFriends (pnsrad.dll)
+ * sends/receives these messages via CTcpBroadcaster. The game server
+ * translates between protobuf (Nakama) and binary wire format (client).
+ */
+syntax = "proto3";
+
+package gameservice.v1;
+
+option csharp_namespace = "Nevr.Gameservice.V1";
+option go_package = "buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/gameservice/v1;gameservicev1";
+option java_multiple_files = true;
+option java_outer_classname = "FriendsProto";
+option java_package = "com.echotools.nevr.gameservice.v1";
+
+// ============================================================================
+// Friend Request Messages (client → server)
+// ============================================================================
+
+// Request the full friend list from the server.
+//
+// Binary wire: 0x20 fixed (routing_id + local_user_uuid + session_guid)
+// Hash: 0xdcfa94680e8d19fc
+// Sender: CNSRADFriends::Refresh()
+// Source: echovr-social-re-answers Q6, Q7
+message SNSFriendListRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Sync friend state with server.
+//
+// Binary wire: 0x20 fixed (same format as ListRequest)
+// Hash: 0xcdc02fd1dbee3aaa
+// Sender: CNSRADFriends::Sync()
+// Source: echovr-social-re-answers Q6, Q7
+message SNSFriendSyncRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Send a friend invite by user ID.
+//
+// Binary wire: 0x28 fixed (routing_id + uuid + session + target_user_id)
+// Hash: 0x7f0d7a28de3c6f70 (shared with SNSPartySendInviteRequest)
+// Sender: CNSRADFriends::Invite(UserAccountID)
+// Source: echovr-social-re-answers Q6, Q7
+message SNSFriendInviteRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // Target user ID (0 if inviting by name).
+  uint64 target_user_id = 2;
+  // Target user name (only set when inviting by name, empty otherwise).
+  // Binary: variable data = null-terminated name string
+  string target_name = 3;
+}
+
+// Accept a friend request.
+//
+// Binary wire: 0x28 fixed, routing_id = 0xFFFFFFFFFFFFFFFF
+// Hash: 0x1bbcb7e810af4620 (shared with SNSPartyJoinRequest)
+// Sender: CNSRADFriends::Accept(UserAccountID)
+// Source: echovr-social-re-answers Q6, Q7
+message SNSFriendAcceptRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // User ID of the friend request sender to accept.
+  uint64 target_user_id = 2;
+}
+
+// Reject a friend request.
+//
+// Binary wire: 0x28 fixed
+// Hash: 0x78908988b7fe6db4 (shared with SNSPartyLeaveRequest)
+// Sender: CNSRADFriends::Reject(UserAccountID)
+// Source: echovr-social-re-answers Q6, Q7
+message SNSFriendRejectRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // User ID of the friend request sender to reject.
+  uint64 target_user_id = 2;
+}
+
+// Cancel a sent friend invite.
+//
+// Binary wire: 0x28 fixed
+// Hash: 0x78908988b7fe6db4 (shared with SNSPartyLeaveRequest)
+// Sender: CNSRADFriends::Cancel(UserAccountID)
+// Source: echovr-social-re-answers Q6, Q7
+message SNSFriendCancelRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // User ID of the invite target to cancel.
+  uint64 target_user_id = 2;
+}
+
+// Remove a friend.
+//
+// Binary wire: 0x28 fixed
+// Hash: 0x78908988b7fe6db4 (shared with SNSPartyLeaveRequest)
+// Sender: CNSRADFriends::Remove(UserAccountID)
+// Source: echovr-social-re-answers Q6, Q7
+message SNSFriendRemoveRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // User ID of the friend to remove.
+  uint64 target_user_id = 2;
+}
+
+// ============================================================================
+// Friend Response Messages (server → client)
+// ============================================================================
+
+// Full friend list response. Populates all three client-side lists.
+//
+// Binary wire: 0x14 fixed (5 × uint32 counts) +
+//   ZStd-compressed variable (uint32 length prefix):
+//     friend_ids[n_total] + friend_data[n_total] +
+//     sent_ids[n_sent] + sent_data[n_sent] +
+//     recv_ids[n_recv] + recv_data[n_recv] +
+//     CStringTable (names for all entries)
+//
+// Handler: CNSRADFriends::ListResponseCB @ pnsrad.dll 0x180085400
+// Source: echovr-social-re-answers Q4
+message SNSFriendListResponseMessage {
+  // Friends sorted by status: offline first, then busy, then online.
+  // The client uses boundary counts to determine status per friend.
+  uint32 offline_count = 1;
+  uint32 busy_count = 2;
+  uint32 online_count = 3;
+  // Pending invite counts.
+  uint32 sent_invite_count = 4;
+  uint32 received_invite_count = 5;
+  // Friend entries (ordered: offline, busy, online).
+  repeated SNSFriendEntry friends = 6;
+  // Sent friend invites.
+  repeated SNSFriendEntry sent_invites = 7;
+  // Received friend invites.
+  repeated SNSFriendEntry received_invites = 8;
+}
+
+// A friend or invite entry.
+// Source: echovr-social-re-answers Q4
+message SNSFriendEntry {
+  // Friend's user ID.
+  // Binary: uint64 in friend_ids/sent_ids/recv_ids array
+  uint64 user_id = 1;
+  // Associated data field.
+  // Binary: uint64 in friend_data/sent_data/recv_data array
+  uint64 data = 2;
+  // Display name.
+  // Binary: entry in CStringTable
+  string name = 3;
+}
+
+// Friend status change notification.
+//
+// Binary wire: 12 bytes fixed (friend_id uint64 + new_status uint32)
+// Handler: CNSRADFriends::StatusNotifyCB @ pnsrad.dll 0x1800877c0
+// Source: echovr-social-re-answers Q5
+message SNSFriendStatusNotifyMessage {
+  // The friend whose status changed.
+  uint64 friend_id = 1;
+  // New status value.
+  SNSFriendStatus new_status = 2;
+}
+
+// Friend online status values.
+// Source: echovr-social-re-answers Q5
+enum SNSFriendStatus {
+  // Friend is offline.
+  SNS_FRIEND_STATUS_OFFLINE_UNSPECIFIED = 0;
+  // Friend is busy (in-game).
+  SNS_FRIEND_STATUS_BUSY = 1;
+  // Friend is online (in menu/lobby).
+  SNS_FRIEND_STATUS_ONLINE = 2;
+  // Friend is no longer in list (removed/unknown).
+  SNS_FRIEND_STATUS_NOT_IN_LIST = 3;
+}
+
+// Friend invite succeeded.
+//
+// Handler: CNSRADFriends::InviteSuccessCB (336-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendInviteSuccessMessage {
+  bytes data = 1;
+}
+
+// Friend invite failed.
+//
+// Handler: CNSRADFriends::InviteFailureCB (172-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendInviteFailureMessage {
+  bytes data = 1;
+}
+
+// Notification that someone sent you a friend invite.
+//
+// Handler: CNSRADFriends::InviteNotifyCB (336-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendInviteNotifyMessage {
+  bytes data = 1;
+}
+
+// Friend accept succeeded.
+//
+// Handler: CNSRADFriends::AcceptSuccessCB (156-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendAcceptSuccessMessage {
+  bytes data = 1;
+}
+
+// Friend accept failed.
+//
+// Handler: CNSRADFriends::AcceptFailureCB (168-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendAcceptFailureMessage {
+  bytes data = 1;
+}
+
+// Notification that someone accepted your friend invite.
+//
+// Handler: CNSRADFriends::AcceptNotifyCB (332-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendAcceptNotifyMessage {
+  bytes data = 1;
+}
+
+// Friend removal response.
+//
+// Handler: CNSRADFriends::RemoveResponseCB (28-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendRemoveResponseMessage {
+  bytes data = 1;
+}
+
+// Notification that a friend removed you.
+//
+// Handler: CNSRADFriends::RemoveNotifyCB (556-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendRemoveNotifyMessage {
+  bytes data = 1;
+}
+
+// Notification that someone rejected your friend invite.
+//
+// Handler: CNSRADFriends::RejectNotifyCB (388-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendRejectNotifyMessage {
+  bytes data = 1;
+}
+
+// Notification that someone withdrew their friend invite to you.
+//
+// Handler: CNSRADFriends::WithdrawnNotifyCB (388-byte function)
+// Source: echovr-social-re-answers Q0 (payload structure NOT reversed)
+message SNSFriendWithdrawnNotifyMessage {
+  bytes data = 1;
+}
