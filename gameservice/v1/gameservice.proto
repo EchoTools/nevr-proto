@@ -131,6 +131,11 @@ message Envelope {
     // Notify a player of their early quit penalty state change.
     SNSEarlyQuitUpdateNotificationMessage early_quit_update_notification = 57;
 
+    // Lobby status notification (kick/ban/demote with message).
+    // TCP server message — sent directly from service to player via
+    // CTcpBroadcaster, not relayed through game server.
+    SNSLobbyStatusNotifyV2Message lobby_status_notify_v2 = 96;
+
     // Party system messages (SNS-based, via CNSRADParty in pnsrad.dll).
 
     SNSPartyCreateRequestMessage party_create_request = 58;
@@ -793,19 +798,54 @@ message SNSEarlyQuitFeatureFlagsMessage {
   uint32 flags = 1;
 }
 
-// Notify a player of their early quit penalty state. Sent from service to game
-// server when a penalty is applied or expires. Re-encoded as a 0x20-byte binary
-// struct.
+// Notify a player of their early quit penalty state. Sent from service to
+// player via CTcpBroadcaster (TCP server connection).
 //
-// Binary wire format (game engine):
-//   +0x00  uint64  player_id
-//   +0x08  int32   num_early_quits
-//   +0x0C  int32   penalty_level
-//   +0x10  uint64  penalty_expiry (unix seconds)
-//   +0x18  uint64  reserved
+// Binary wire format (0x38 bytes, confirmed via CTcpBroadcaster::Listen):
+//   +0x00  UUID    login_session   (16B, not read by handler)
+//   +0x10  uint64  player_id       (8B, not read by handler)
+//   +0x18  int64   penalty_expiry  (8B, unix seconds — compared against stored)
+//   +0x20  uint64  reserved        (8B, not read by handler)
+//   +0x28  int32   num_early_quits (4B, stored to game state)
+//   +0x2C  int32   penalty_level   (4B, stored to game state)
+//   +0x30  int32   field_30        (4B, stored to game state)
+//   +0x34  uint8   field_34        (1B, stored to game state)
+//   +0x35  uint8   field_35        (1B, stored to game state)
+//   +0x36  [2]byte padding
+//
+// Handler: CR15NetGame::EarlyQuitUpdateCB (Quest 0x136ac50)
 message SNSEarlyQuitUpdateNotificationMessage {
   string entrant_id = 1;
   int32 num_early_quits = 2;
   int32 penalty_level = 3;
   uint64 penalty_expiry = 4;
+}
+
+// Lobby status notification. Sent from service directly to player via
+// CTcpBroadcaster (TCP server connection) to notify of kick/ban/demote.
+// Displays a message to the player in the game UI via the lobby status
+// script expression (CR15NetLobbyStatusExpression).
+//
+// Binary wire format (0x60 bytes, confirmed via CTcpBroadcaster::Listen):
+//   +0x00  UUID    channel         (16B, matched against lobby login_id)
+//   +0x10  [64]    message         (64B UTF-8, displayed to player)
+//   +0x50  int64   expiry_time     (8B, unix timestamp)
+//   +0x58  uint64  reason          (8B, 0=banned, 1=kicked, 2=demoted)
+//
+// Handler: CR15NetGame::LobbyStatusNotifyCB (Quest 0x135f9cc)
+message SNSLobbyStatusNotifyV2Message {
+  // The lobby/channel this notification applies to.
+  string channel = 1;
+  // A message displayed to the player (max 64 bytes UTF-8).
+  string message = 2;
+  // Unix timestamp when the status change expires.
+  int64 expiry_time = 3;
+
+  enum Reason {
+    REASON_BANNED_UNSPECIFIED = 0;
+    REASON_KICKED = 1;
+    REASON_DEMOTED = 2;
+  }
+  // The reason for the status notification.
+  Reason reason = 4;
 }
