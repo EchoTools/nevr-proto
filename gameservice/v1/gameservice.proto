@@ -157,6 +157,22 @@ message Envelope {
     SNSPartyMemberUpdateMessage party_member_update = 74;
     SNSPartyLockRequestMessage party_lock_request = 75;
     SNSPartyUnlockRequestMessage party_unlock_request = 76;
+    SNSPartyLeaveSuccessMessage party_leave_success = 97;
+    SNSPartyLeaveFailureMessage party_leave_failure = 98;
+    SNSPartyKickSuccessMessage party_kick_success = 99;
+    SNSPartyPassSuccessMessage party_pass_success = 100;
+    SNSPartyInviteResponseMessage party_invite_response = 101;
+    SNSPartyInviteListResponseMessage party_invite_list_response = 102;
+    SNSPartyUpdateSuccessMessage party_update_success = 103;
+    SNSPartyUpdateNotifyMessage party_update_notify = 104;
+    SNSPartyUpdateMemberSuccessMessage party_update_member_success = 105;
+    SNSPartyUpdateMemberFailureMessage party_update_member_failure = 106;
+    SNSPartyUpdateMemberNotifyMessage party_update_member_notify = 107;
+    SNSPartyLockSuccessMessage party_lock_success = 108;
+    SNSPartyLockFailureMessage party_lock_failure = 109;
+    SNSPartyLockNotifyMessage party_lock_notify = 110;
+    SNSPartyUnlockSuccessMessage party_unlock_success = 111;
+    SNSPartyUnlockNotifyMessage party_unlock_notify = 112;
 
     // Friends system messages (SNS-based, via CNSRADFriends in pnsrad.dll).
 

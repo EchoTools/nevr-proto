@@ -2,7 +2,7 @@
  * Party system SNS messages.
  *
  * Source: echovr-reconstruction src/pnsrad/Social/CNSRADParty.h,
- *         echovr-social-re-answers.md Q1-Q3, Q9
+ *         echovr-social-re-answers.md (rounds 1 and 2)
  *
  * The party system is 100% SNS-message-based. CNSRADParty (pnsrad.dll)
  * sends/receives these messages via CTcpBroadcaster. The game server
@@ -21,6 +21,20 @@ option java_multiple_files = true;
 option java_outer_classname = "PartyProto";
 option java_package = "com.echotools.nevr.gameservice.v1";
 
+// Common error codes used by party failure messages.
+// Source: echovr-social-re-answers round 2, Q1b/Q22
+enum SNSPartyErrorCode {
+  SNS_PARTY_ERROR_CODE_BAD_REQUEST_UNSPECIFIED = 0;
+  SNS_PARTY_ERROR_CODE_INTERNAL = 1;
+  SNS_PARTY_ERROR_CODE_NOT_FOUND = 2;
+  // Used by LeaveFailure, UpdateMemberFailure:
+  SNS_PARTY_ERROR_CODE_NOT_MEMBER = 3;
+  SNS_PARTY_ERROR_CODE_NOT_OWNER = 4;
+  // Used by JoinFailure (values 3-4 differ from leave):
+  SNS_PARTY_ERROR_CODE_LOCKED = 5;
+  SNS_PARTY_ERROR_CODE_FULL = 6;
+}
+
 // ============================================================================
 // Party Request Messages (client → server)
 // ============================================================================
@@ -30,7 +44,7 @@ option java_package = "com.echotools.nevr.gameservice.v1";
 // Binary wire: 0x28 fixed (SNSPartyPayload) + variable (party_json + member_json)
 // Hash: 0x0b7bd21332523994 (shared with SNSPartyMemberUpdate)
 // Sender: CNSRADParty::CreateInternal (pnsrad.dll)
-// Source: echovr-social-re-answers Q9
+// Source: echovr-social-re-answers round 1 Q9
 message SNSPartyCreateRequestMessage {
   // Session login UUID of the requester.
   string login_session_id = 1;
@@ -168,7 +182,7 @@ message SNSPartyUnlockRequestMessage {
 //
 // Binary wire: 8 bytes fixed at STcpMsg+0x08 (party_id only)
 // Handler: CNSRADParty::CreateSuccessCB @ pnsrad.dll 0x180080dc0
-// Source: echovr-social-re-answers Q1
+// Source: echovr-social-re-answers round 1 Q1
 message SNSPartyCreateSuccessMessage {
   // Server-assigned party ID.
   uint64 party_id = 1;
@@ -176,10 +190,14 @@ message SNSPartyCreateSuccessMessage {
 
 // Party creation failed.
 //
-// Source: Quest symbol SNSPartyCreateFailure (payload structure NOT reversed)
+// Handler: CNSRADParty::CreateFailureCB
+// Source: echovr-social-re-answers round 2 (not directly asked, but follows
+//   same error pattern as LeaveFailure/JoinFailure)
 message SNSPartyCreateFailureMessage {
-  // Raw payload (structure not yet reversed).
-  bytes data = 1;
+  // Party ID (if applicable).
+  uint64 party_id = 1;
+  // Error code.
+  SNSPartyErrorCode error_code = 2;
 }
 
 // Successfully joined a party. Contains full party state.
@@ -187,7 +205,7 @@ message SNSPartyCreateFailureMessage {
 // Binary wire: fixed (party_id + owner_id + packed_flags) +
 //   ZStd-compressed variable (member IDs + party JSON + CStringTable)
 // Handler: CNSRADParty::JoinSuccessCB @ pnsrad.dll 0x180084aa0
-// Source: echovr-social-re-answers Q2
+// Source: echovr-social-re-answers round 1 Q2
 message SNSPartyJoinSuccessMessage {
   // Party ID.
   uint64 party_id = 1;
@@ -207,7 +225,7 @@ message SNSPartyJoinSuccessMessage {
 }
 
 // A party member entry within JoinSuccess.
-// Source: echovr-social-re-answers Q2
+// Source: echovr-social-re-answers round 1 Q2
 message SNSPartyMember {
   // Member's user ID.
   // Binary: uint64 in member_ids array
@@ -222,10 +240,17 @@ message SNSPartyMember {
 
 // Party join failed.
 //
-// Source: Quest symbol SNSPartyJoinFailure (payload structure NOT reversed)
+// Binary wire: party_id (u64) + error_code (u8) at STcpMsg+0x08
+// Handler: CNSRADParty::JoinFailureCB @ pnsrad.dll 0x180084740
+// Source: echovr-social-re-answers round 2 Q22
+//
+// Error codes: 0=bad_request, 1=internal, 2=not_found, 3=locked, 4=full
 message SNSPartyJoinFailureMessage {
-  // Raw payload (structure not yet reversed).
-  bytes data = 1;
+  // Party ID.
+  uint64 party_id = 1;
+  // Error code. Join-specific values: 3=locked, 4=full.
+  // Binary: u8 at payload+0x10, switch at 0x180084740
+  SNSPartyErrorCode error_code = 2;
 }
 
 // Notification to existing party members that a new member joined.
@@ -233,7 +258,7 @@ message SNSPartyJoinFailureMessage {
 // Binary wire: 16 bytes fixed (party_id + member_id) +
 //   variable (member_name\0 + member_json, not compressed)
 // Handler: CNSRADParty::JoinNotifyCB @ pnsrad.dll 0x180084980
-// Source: echovr-social-re-answers Q3
+// Source: echovr-social-re-answers round 1 Q3
 message SNSPartyJoinNotifyMessage {
   // Party ID (handler validates this matches current party).
   uint64 party_id = 1;
@@ -245,30 +270,251 @@ message SNSPartyJoinNotifyMessage {
   string member_json = 4;
 }
 
+// Leave succeeded. No-op acknowledgment.
+//
+// Handler: CNSRADParty::LeaveSuccessCB (Quest 0x20166c, 28 bytes — trivial)
+// Source: echovr-social-re-answers round 2 Q1
+message SNSPartyLeaveSuccessMessage {}
+
+// Leave failed.
+//
+// Binary wire: party_id (u64) + error_code (u8) at STcpMsg+0x08
+// Handler: CNSRADParty::LeaveFailureCB @ pnsrad.dll 0x1800851a0
+// Source: echovr-social-re-answers round 2 Q1b
+//
+// Error codes: 0=bad_request, 1=internal, 2=not_found, 3=not_member, 4=not_owner
+message SNSPartyLeaveFailureMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // Error code.
+  // Binary: u8 at payload+0x10, switch at 0x1800851a0
+  SNSPartyErrorCode error_code = 2;
+}
+
 // Notification that a member left the party.
 //
-// Source: Quest symbol SNSPartyLeaveNotify (payload structure NOT reversed)
+// Binary wire: 0x18 fixed (party_id + member_id), no variable data
+// Handler: CNSRADParty::LeaveNotifyCB @ pnsrad.dll 0x180085300
+// Source: echovr-social-re-answers round 2 Q2
 message SNSPartyLeaveNotifyMessage {
-  bytes data = 1;
+  // Party ID (handler validates match).
+  uint64 party_id = 1;
+  // User ID of the member who left.
+  uint64 member_id = 2;
 }
 
-// Notification that a member was kicked from the party.
+// Kick succeeded.
 //
-// Source: Quest symbol SNSPartyKickNotify (payload structure NOT reversed)
+// Binary wire: 0x18 fixed (party_id + kick_id)
+// Handler: CNSRADParty::KickSuccessCB @ pnsrad.dll 0x180085170
+// Source: echovr-social-re-answers round 2 Q3
+message SNSPartyKickSuccessMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // User ID of the kicked member.
+  uint64 kick_id = 2;
+}
+
+// Kick notification. Sent to ALL party members (including the kicked one).
+//
+// Binary wire: 0x18 fixed (party_id + kick_id)
+// Handler: CNSRADParty::KickNotifyCB @ pnsrad.dll 0x180085040
+// Source: echovr-social-re-answers round 2 Q4
+//
+// If kick_id == self: client destroys party and re-creates (reset state).
+// If kick_id != self: client removes kicked member from local list.
 message SNSPartyKickNotifyMessage {
-  bytes data = 1;
+  // Party ID (handler validates match).
+  uint64 party_id = 1;
+  // User ID of the kicked member.
+  uint64 kick_id = 2;
 }
 
-// Notification that party ownership was transferred.
+// Ownership transfer succeeded.
 //
-// Source: Quest symbol SNSPartyPassNotify (payload structure NOT reversed)
-message SNSPartyPassNotifyMessage {
-  bytes data = 1;
+// Binary wire: 0x18 fixed (party_id + pass_id)
+// Handler: CNSRADParty::PassSuccessCB @ pnsrad.dll 0x180085f80
+// Source: echovr-social-re-answers round 2 Q5
+message SNSPartyPassSuccessMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // User ID of the new owner.
+  uint64 pass_id = 2;
 }
+
+// Ownership transfer notification. Sent to all party members.
+//
+// Binary wire: 0x18 fixed (party_id + pass_id)
+// Handler: CNSRADParty::PassNotifyCB @ pnsrad.dll 0x180085ef0
+// Source: echovr-social-re-answers round 2 Q6
+//
+// Client updates owner_id at this+0x2f0 to pass_id.
+message SNSPartyPassNotifyMessage {
+  // Party ID (handler validates match).
+  uint64 party_id = 1;
+  // User ID of the new owner.
+  uint64 pass_id = 2;
+}
+
+// Invite delivery acknowledgment. No-op.
+//
+// Handler: CNSRADParty::InviteResponseCB (Quest 0x202210, 28 bytes — trivial)
+// Source: echovr-social-re-answers round 2 Q7
+message SNSPartyInviteResponseMessage {}
 
 // Notification that a party invite was received.
 //
-// Source: Quest symbol SNSPartyInviteNotify (payload structure NOT reversed)
+// Binary wire: 0x20 fixed (time + party_id + sender_id) + variable (sender_name)
+// Handler: CNSRADParty::InviteNotifyCB @ pnsrad.dll 0x180084350
+// Source: echovr-social-re-answers round 2 Q8
 message SNSPartyInviteNotifyMessage {
-  bytes data = 1;
+  // Timestamp of the invite.
+  // Binary: i64 at payload+0x08
+  int64 time = 1;
+  // Party ID of the inviting party.
+  // Binary: u64 at payload+0x10
+  uint64 party_id = 2;
+  // User ID of the invite sender.
+  // Binary: u64 at payload+0x18
+  uint64 sender_id = 3;
+  // Display name of the invite sender.
+  // Binary: variable string data at msg+0x10
+  string sender_name = 4;
+}
+
+// Full invite list response (all pending invites).
+//
+// Binary wire: 0x0C fixed (n_invites u32) + variable (3 × u64 arrays + CStringTable)
+// Handler: CNSRADParty::InviteListResponseCB @ pnsrad.dll 0x180083f10
+// Source: echovr-social-re-answers round 2 Q9
+message SNSPartyInviteListResponseMessage {
+  // Pending invite entries.
+  repeated SNSPartyInviteEntry invites = 1;
+}
+
+// A single invite entry within InviteListResponse.
+// Source: echovr-social-re-answers round 2 Q9
+message SNSPartyInviteEntry {
+  // Timestamp of the invite.
+  // Binary: i64 in times array (section 0)
+  int64 time = 1;
+  // Party ID of the inviting party.
+  // Binary: u64 in party_ids array (section 1)
+  uint64 party_id = 2;
+  // User ID of the invite sender.
+  // Binary: u64 in sender_ids array (section 2)
+  uint64 sender_id = 3;
+  // Display name of the invite sender.
+  // Binary: entry in CStringTable (section 3)
+  string sender_name = 4;
+}
+
+// Party data updated. No-op acknowledgment.
+//
+// Handler: CNSRADParty::UpdateSuccessCB (Quest 0x201794, 28 bytes — trivial)
+// Source: echovr-social-re-answers round 2 Q20
+message SNSPartyUpdateSuccessMessage {}
+
+// Notification that party data changed.
+//
+// Binary wire: 0x10 fixed (party_id) + variable JSON blob
+// Handler: CNSRADParty::UpdateNotifyCB @ pnsrad.dll 0x180087ed0
+// Source: echovr-social-re-answers round 2 Q20
+//
+// Client decodes JSON into CJson at this+0x230 (party_json).
+// If lobby_id changes: fires lobby joined/left delegate.
+message SNSPartyUpdateNotifyMessage {
+  // Party ID (handler validates match).
+  uint64 party_id = 1;
+  // Updated party JSON data.
+  // Binary: variable string data decoded via CJson::DecodeFrom
+  string party_json = 2;
+}
+
+// Member data update succeeded. Logs only.
+//
+// Binary wire: member_id (u64) + party_id (u64) at STcpMsg+0x08
+// Handler: CNSRADParty::UpdateMemberSuccessCB @ pnsrad.dll 0x180087ea0
+// Source: echovr-social-re-answers round 2 Q20
+message SNSPartyUpdateMemberSuccessMessage {
+  // Member whose data was updated.
+  uint64 member_id = 1;
+  // Party ID.
+  uint64 party_id = 2;
+}
+
+// Member data update failed.
+//
+// Binary wire: party_id (u64) + error_code (u8) at STcpMsg+0x08
+// Handler: CNSRADParty::UpdateMemberFailureCB @ pnsrad.dll 0x180087d40
+// Source: echovr-social-re-answers round 2 Q20
+message SNSPartyUpdateMemberFailureMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // Error code (same set as LeaveFailure).
+  SNSPartyErrorCode error_code = 2;
+}
+
+// Notification that a member's data changed.
+//
+// Binary wire: 0x18 fixed (party_id + member_id) + variable JSON blob
+// Handler: CNSRADParty::UpdateMemberNotifyCB @ pnsrad.dll 0x180087dc0
+// Source: echovr-social-re-answers round 2 Q20
+//
+// Client finds member by member_id, decodes JSON into their CJson at
+// this+0x280 + member_index * 0x10.
+message SNSPartyUpdateMemberNotifyMessage {
+  // Party ID (handler validates match).
+  uint64 party_id = 1;
+  // User ID of the updated member.
+  uint64 member_id = 2;
+  // Updated member JSON data.
+  // Binary: variable string data decoded via CJson::DecodeFrom
+  string member_json = 3;
+}
+
+// Lock succeeded. No-op acknowledgment.
+//
+// Handler: CNSRADParty::LockSuccessCB (Quest 0x201b44, 28 bytes — trivial)
+// Source: echovr-social-re-answers round 2 Q21
+message SNSPartyLockSuccessMessage {}
+
+// Lock failed.
+//
+// Binary wire: party_id (u64) at STcpMsg+0x08
+// Handler: CNSRADParty::LockFailureCB @ pnsrad.dll 0x180085a90
+// Source: echovr-social-re-answers round 2 Q21
+message SNSPartyLockFailureMessage {
+  // Party ID.
+  uint64 party_id = 1;
+}
+
+// Lock notification. Sent to all party members.
+//
+// Binary wire: 0x10 fixed (party_id only)
+// Handler: CNSRADParty::LockNotifyCB @ pnsrad.dll 0x180085ac0
+// Source: echovr-social-re-answers round 2 Q21
+//
+// Client sets dirty_flags |= 0x10 (locked bit).
+message SNSPartyLockNotifyMessage {
+  // Party ID (handler validates match).
+  uint64 party_id = 1;
+}
+
+// Unlock succeeded. No-op acknowledgment.
+//
+// Handler: CNSRADParty::UnlockSuccessCB (Quest 0x201bf4, 28 bytes — trivial)
+// Source: echovr-social-re-answers round 2 Q21
+message SNSPartyUnlockSuccessMessage {}
+
+// Unlock notification. Sent to all party members.
+//
+// Binary wire: 0x10 fixed (party_id only)
+// Handler: CNSRADParty::UnlockNotifyCB @ pnsrad.dll 0x180087b50
+// Source: echovr-social-re-answers round 2 Q21
+//
+// Client clears dirty_flags &= ~0x10 (locked bit).
+message SNSPartyUnlockNotifyMessage {
+  // Party ID (handler validates match).
+  uint64 party_id = 1;
 }
