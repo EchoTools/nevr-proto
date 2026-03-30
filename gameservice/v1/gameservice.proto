@@ -7,6 +7,7 @@ syntax = "proto3";
 
 package gameservice.v1;
 
+import "gameservice/v1/activities.proto";
 import "gameservice/v1/friends.proto";
 import "gameservice/v1/party.proto";
 import "google/protobuf/timestamp.proto";
@@ -173,12 +174,19 @@ message Envelope {
     SNSPartyLockNotifyMessage party_lock_notify = 110;
     SNSPartyUnlockSuccessMessage party_unlock_success = 111;
     SNSPartyUnlockNotifyMessage party_unlock_notify = 112;
+    SNSPartyKickFailureMessage party_kick_failure = 113;
+    SNSPartyPassFailureMessage party_pass_failure = 114;
+    SNSPartyUnlockFailureMessage party_unlock_failure = 115;
+    SNSPartyUpdateFailureMessage party_update_failure = 116;
+    SNSPartyUpdateRequestMessage party_update_request = 117;
+    SNSPartyUpdateMemberRequestMessage party_update_member_request = 118;
+    SNSPartyInviteListRefreshRequestMessage party_invite_list_refresh_request = 119;
 
     // Friends system messages (SNS-based, via CNSRADFriends in pnsrad.dll).
 
-    SNSFriendListRequestMessage friend_list_request = 77;
+    SNSFriendListRefreshRequestMessage friend_list_refresh_request = 77;
     SNSFriendListResponseMessage friend_list_response = 78;
-    SNSFriendSyncRequestMessage friend_sync_request = 79;
+    SNSFriendListSubscribeRequestMessage friend_list_subscribe_request = 79;
     SNSFriendStatusNotifyMessage friend_status_notify = 80;
     SNSFriendInviteRequestMessage friend_invite_request = 81;
     SNSFriendInviteSuccessMessage friend_invite_success = 82;
@@ -195,6 +203,76 @@ message Envelope {
     SNSFriendRemoveRequestMessage friend_remove_request = 93;
     SNSFriendRemoveResponseMessage friend_remove_response = 94;
     SNSFriendRemoveNotifyMessage friend_remove_notify = 95;
+    SNSFriendListUnsubscribeRequestMessage friend_list_unsubscribe_request = 120;
+
+    // Activity system messages (SNS-based, via CNSRADActivities in pnsrad.dll).
+
+    SNSActivityDailyListRequestMessage activity_daily_list_request = 123;
+    SNSActivityDailyListResponseMessage activity_daily_list_response = 124;
+    SNSActivityDailyRewardRequestMessage activity_daily_reward_request = 125;
+    SNSActivityDailyRewardSuccessMessage activity_daily_reward_success = 126;
+    SNSActivityDailyRewardFailureMessage activity_daily_reward_failure = 127;
+    SNSActivityWeeklyListRequestMessage activity_weekly_list_request = 128;
+    SNSActivityWeeklyListResponseMessage activity_weekly_list_response = 129;
+    SNSActivityWeeklyRewardRequestMessage activity_weekly_reward_request = 130;
+    SNSActivityWeeklyRewardSuccessMessage activity_weekly_reward_success = 131;
+    SNSActivityWeeklyRewardFailureMessage activity_weekly_reward_failure = 132;
+    SNSActivityEventListRequestMessage activity_event_list_request = 133;
+    SNSActivityEventListResponseMessage activity_event_list_response = 134;
+    SNSActivityEventRewardRequestMessage activity_event_reward_request = 135;
+    SNSActivityEventRewardSuccessMessage activity_event_reward_success = 136;
+    SNSActivityEventRewardFailureMessage activity_event_reward_failure = 137;
+
+    // Tournament and leaderboard messages.
+
+    SNSAddTournamentMessage add_tournament = 138;
+    SNSRemoveTournamentMessage remove_tournament = 139;
+    SNSLeaderboardRequestV2Message leaderboard_request_v2 = 140;
+    SNSLeaderboardResponseMessage leaderboard_response = 141;
+
+    // Lobby directory messages.
+
+    SNSLobbyDirectoryJsonMessage lobby_directory_json = 142;
+    SNSLobbyDirectoryRequestJsonV2Message lobby_directory_request_json_v2 = 143;
+    SNSLobbyPlayerSessionsFailureV3Message lobby_player_sessions_failure_v3 = 144;
+
+    // Generic messages.
+
+    SNSGenericMessage generic_message = 145;
+    SNSGenericMessageNotifyMessage generic_message_notify = 146;
+
+    // Auth lifecycle messages.
+
+    SNSLogOutMessage log_out = 147;
+    SNSLoginRemovedNotifyMessage login_removed_notify = 148;
+
+    // Match and game state messages.
+
+    SNSMatchEndedV5Message match_ended_v5 = 149;
+
+    // Cosmetics and IAP messages.
+
+    SNSNewUnlocksNotificationMessage new_unlocks_notification = 150;
+    SNSPurchaseItemsMessage purchase_items = 151;
+    SNSPurchaseItemsResultMessage purchase_items_result = 152;
+
+    // Rewards and config messages.
+
+    SNSRewardsSettingsMessage rewards_settings = 153;
+    SNSServerSettingsResponseV2Message server_settings_response_v2 = 154;
+
+    // Profile failure message.
+
+    SNSUserServerProfileUpdateFailureMessage user_server_profile_update_failure = 155;
+
+    // Telemetry messages.
+
+    SNSTelemetryEventMessage telemetry_event = 156;
+    SNSTelemetryNotifyMessage telemetry_notify = 157;
+
+    // Bot spawn message (game server only).
+
+    SNSLobbySetSpawnBotOnServerMessage lobby_set_spawn_bot_on_server = 158;
   }
 }
 
@@ -864,4 +942,265 @@ message SNSLobbyStatusNotifyV2Message {
   }
   // The reason for the status notification.
   Reason reason = 4;
+}
+
+// ============================================================================
+// Tournament & Leaderboard Messages
+// ============================================================================
+
+// Add a tournament. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSAddTournamentMessage {
+  // Raw tournament data.
+  bytes data = 1;
+}
+
+// Remove a tournament. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSRemoveTournamentMessage {
+  // Raw tournament data.
+  bytes data = 1;
+}
+
+// Request leaderboard data. Client to server.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSLeaderboardRequestV2Message {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // Raw request payload.
+  bytes data = 2;
+}
+
+// Leaderboard response. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSLeaderboardResponseMessage {
+  // Raw leaderboard data.
+  bytes data = 1;
+}
+
+// ============================================================================
+// Lobby Directory Messages
+// ============================================================================
+
+// Lobby directory JSON data. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSLobbyDirectoryJsonMessage {
+  // JSON directory data.
+  string directory_json = 1;
+}
+
+// Request lobby directory. Client to server.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSLobbyDirectoryRequestJsonV2Message {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Lobby player sessions request failed. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSLobbyPlayerSessionsFailureV3Message {
+  // Error code.
+  uint32 error_code = 1;
+  // Error message.
+  string message = 2;
+}
+
+// ============================================================================
+// Generic Messages
+// ============================================================================
+
+// A generic SNS message with opaque payload.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSGenericMessage {
+  // Symbol hash identifying the message type.
+  SymbolHash type = 1;
+  // Raw message data.
+  bytes data = 2;
+}
+
+// A generic SNS notification with opaque payload.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSGenericMessageNotifyMessage {
+  // Symbol hash identifying the notification type.
+  SymbolHash type = 1;
+  // Raw notification data.
+  bytes data = 2;
+}
+
+// ============================================================================
+// Auth Lifecycle Messages
+// ============================================================================
+
+// Client logout request.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSLogOutMessage {
+  // Session login UUID.
+  string login_session_id = 1;
+}
+
+// Notification that the user's login was removed (e.g., account deleted).
+// Server to client.
+//
+// Source: nakama server/evr/types.go (stub),
+//         pnsrad/Social/CNSRADUsers.h AccountRemoved hash 0xd299785ba56b9c75
+message SNSLoginRemovedNotifyMessage {
+  // Raw notification data.
+  bytes data = 1;
+}
+
+// ============================================================================
+// Match State Messages
+// ============================================================================
+
+// Match ended notification. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSMatchEndedV5Message {
+  // Raw match result data.
+  bytes data = 1;
+}
+
+// ============================================================================
+// Cosmetics & IAP Messages
+// ============================================================================
+
+// Notification that new cosmetic items have been unlocked.
+// Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSNewUnlocksNotificationMessage {
+  // Raw unlock data.
+  bytes data = 1;
+}
+
+// Purchase items request. Client to server.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSPurchaseItemsMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // Raw purchase request data.
+  bytes data = 2;
+}
+
+// Purchase items result. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSPurchaseItemsResultMessage {
+  // Raw purchase result data.
+  bytes data = 1;
+}
+
+// ============================================================================
+// Rewards & Config Messages
+// ============================================================================
+
+// Rewards settings configuration. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSRewardsSettingsMessage {
+  // Raw rewards settings data.
+  bytes data = 1;
+}
+
+// Server settings response. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSServerSettingsResponseV2Message {
+  // JSON settings data.
+  string settings_json = 1;
+}
+
+// ============================================================================
+// Profile Messages
+// ============================================================================
+
+// User server profile update failed. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSUserServerProfileUpdateFailureMessage {
+  // Cross-platform user ID.
+  XPlatformID user_id = 1;
+  // Error status code.
+  uint64 status_code = 2;
+  // Error message.
+  string message = 3;
+}
+
+// ============================================================================
+// Telemetry Messages
+// ============================================================================
+
+// Telemetry event. Client to server.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSTelemetryEventMessage {
+  // Raw telemetry event data.
+  bytes data = 1;
+}
+
+// Telemetry notification. Server to client.
+//
+// Source: nakama server/evr/types.go (stub)
+message SNSTelemetryNotifyMessage {
+  // Raw telemetry notification data.
+  bytes data = 1;
+}
+
+// ============================================================================
+// Bot Spawn Messages
+// ============================================================================
+
+// Bot difficulty levels.
+// Source: nakama server/evr/gameserver_spawn_bot.go
+enum BotDifficulty {
+  BOT_DIFFICULTY_BEGINNER_UNSPECIFIED = 0;
+  BOT_DIFFICULTY_INTERMEDIATE = 1;
+  BOT_DIFFICULTY_ADVANCED = 2;
+  BOT_DIFFICULTY_EXPERT = 3;
+  BOT_DIFFICULTY_MASTER = 4;
+}
+
+// Instruct the game server to spawn bots.
+// Sent from service to game server only.
+//
+// Binary wire format (48 bytes):
+//   +0x00  uint32  message_type       (unused)
+//   +0x04  uint32  match_id
+//   +0x08  uint32  team_id            (0=blue, 1=orange)
+//   +0x0C  uint32  bot_count          (1-3)
+//   +0x10  uint32  difficulty         (0-4, BotDifficulty)
+//   +0x14  uint32  loadout_id
+//   +0x18  [12]    loadout_data
+//   +0x24  uint32  spawn_position_seed
+//   +0x28  uint32  reserved
+//   +0x2C  uint32  reserved2
+//
+// Symbol: 0xa0687d9799640878
+// Source: nakama server/evr/gameserver_spawn_bot.go
+message SNSLobbySetSpawnBotOnServerMessage {
+  // The lobby session to spawn bots in.
+  string lobby_session_id = 1;
+  // Team to spawn bots on (0=blue, 1=orange).
+  uint32 team_id = 2;
+  // Number of bots to spawn (1-3).
+  uint32 bot_count = 3;
+  // Bot difficulty level.
+  BotDifficulty difficulty = 4;
+  // Loadout preset ID.
+  uint32 loadout_id = 5;
+  // Additional loadout data.
+  bytes loadout_data = 6;
+  // RNG seed for spawn positions.
+  uint32 spawn_position_seed = 7;
 }

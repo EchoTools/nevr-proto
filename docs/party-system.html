@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Echo VR Party System — Protocol Documentation</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --border: #0f3460;
+    --text: #e0e0e0;
+    --heading: #e94560;
+    --accent: #533483;
+    --muted: #888;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  h1 {
+    color: var(--heading);
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  h2 {
+    color: var(--heading);
+    font-size: 1.4rem;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    color: #ccc;
+    font-size: 1.1rem;
+    margin: 1.5rem 0 0.5rem;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin-bottom: 2rem;
+  }
+  .diagram-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+  .diagram-container svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .mermaid {
+    text-align: center;
+  }
+  .legend {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  .legend code {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+  }
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1rem;
+  }
+  @media (max-width: 900px) {
+    .cols { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Echo VR Party System</h1>
+<p class="subtitle">Protocol flowcharts and sequence diagrams &mdash; derived from
+<code>pnsrad/Social/CNSRADParty.h</code> and <code>nevr-proto/gameservice/v1/party.proto</code></p>
+
+<div class="legend">
+  <strong>Actors:</strong>
+  <code>Client A</code> = party host / action initiator &middot;
+  <code>Client B</code> = other party member &middot;
+  <code>Server</code> = game service (Nakama) &middot;
+  Messages use the <code>SNSParty*</code> protobuf names.
+</div>
+
+<!-- ================================================================== -->
+<h2>Flowcharts</h2>
+<!-- ================================================================== -->
+
+<h3>Party Lifecycle</h3>
+<div class="diagram-container" id="fc-lifecycle"></div>
+
+<h3>Invite Flow</h3>
+<div class="diagram-container" id="fc-invite"></div>
+
+<div class="cols">
+  <div>
+    <h3>Lock / Unlock State Machine</h3>
+    <div class="diagram-container" id="fc-lock"></div>
+  </div>
+  <div>
+    <h3>Ownership Transfer</h3>
+    <div class="diagram-container" id="fc-pass"></div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2>Sequence Diagrams</h2>
+<!-- ================================================================== -->
+
+<h3>Party Creation</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Creator)
+    participant S as Server
+
+    A->>S: SNSPartyCreateRequest<br/>(login_session_id, max_members, party_json, member_json)
+    alt success
+        S-->>A: SNSPartyCreateSuccess<br/>(party_id)
+        Note over A: Stores party_id, sets self as owner
+    else failure
+        S-->>A: SNSPartyCreateFailure<br/>(party_id, error_code)
+    end
+</pre>
+</div>
+
+<h3>Player Joining via Invite</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Host)
+    participant S as Server
+    participant B as Client B (Invitee)
+
+    A->>S: SNSPartySendInviteRequest<br/>(login_session_id, target_user_id)
+    S-->>A: SNSPartyInviteResponse<br/>(ack)
+    S-->>B: SNSPartyInviteNotify<br/>(time, party_id, sender_id, sender_name)
+    Note over B: User sees invite in UI
+
+    alt accept
+        B->>S: SNSPartyRespondToInviteRequest<br/>(target_user_uuid, param=1)
+        S-->>B: SNSPartyJoinSuccess<br/>(party_id, owner_id, members[])
+        S-->>A: SNSPartyJoinNotify<br/>(party_id, member_id, member_name)
+    else reject
+        B->>S: SNSPartyRespondToInviteRequest<br/>(target_user_uuid, param=0)
+        Note over S: No notification sent to host
+    end
+</pre>
+</div>
+
+<h3>Player Joining Directly</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant B as Client B (Joiner)
+    participant S as Server
+    participant A as Client A (Host)
+
+    B->>S: SNSPartyJoinRequest<br/>(login_session_id, party_id)
+    alt success
+        S-->>B: SNSPartyJoinSuccess<br/>(party_id, owner_id, max_members, locked, party_json, members[])
+        S-->>A: SNSPartyJoinNotify<br/>(party_id, member_id, member_name, member_json)
+    else locked
+        S-->>B: SNSPartyJoinFailure<br/>(party_id, LOCKED)
+    else full
+        S-->>B: SNSPartyJoinFailure<br/>(party_id, FULL)
+    else not found
+        S-->>B: SNSPartyJoinFailure<br/>(party_id, NOT_FOUND)
+    end
+</pre>
+</div>
+
+<h3>Kick Operation</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Host)
+    participant S as Server
+    participant B as Client B (Kicked)
+    participant C as Client C (Bystander)
+
+    A->>S: SNSPartyKickRequest<br/>(login_session_id, target_user_uuid, param)
+    alt success
+        S-->>A: SNSPartyKickSuccess<br/>(party_id, kick_id)
+        S-->>A: SNSPartyKickNotify<br/>(party_id, kick_id)
+        S-->>B: SNSPartyKickNotify<br/>(party_id, kick_id)
+        Note over B: kick_id == self: destroy party, reset state
+        S-->>C: SNSPartyKickNotify<br/>(party_id, kick_id)
+        Note over C: kick_id != self: remove member from local list
+    else failure
+        S-->>A: SNSPartyKickFailure<br/>(party_id, error_code)
+    end
+</pre>
+</div>
+
+<h3>Ownership Transfer (Pass)</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Current Host)
+    participant S as Server
+    participant B as Client B (New Host)
+    participant C as Client C (Member)
+
+    A->>S: SNSPartyPassOwnershipRequest<br/>(login_session_id, target_user_uuid)
+    alt success
+        S-->>A: SNSPartyPassSuccess<br/>(party_id, pass_id)
+        S-->>A: SNSPartyPassNotify<br/>(party_id, pass_id)
+        S-->>B: SNSPartyPassNotify<br/>(party_id, pass_id)
+        S-->>C: SNSPartyPassNotify<br/>(party_id, pass_id)
+        Note over A,C: All clients update owner_id to pass_id
+    else failure
+        S-->>A: SNSPartyPassFailure<br/>(party_id, error_code)
+    end
+</pre>
+</div>
+
+<h3>Lock / Unlock</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Host)
+    participant S as Server
+    participant B as Client B (Member)
+
+    rect rgb(40, 40, 80)
+    Note over A,B: Lock Party
+    A->>S: SNSPartyLockRequest<br/>(login_session_id)
+    alt success
+        S-->>A: SNSPartyLockSuccess
+        S-->>A: SNSPartyLockNotify<br/>(party_id)
+        S-->>B: SNSPartyLockNotify<br/>(party_id)
+        Note over A,B: dirty_flags |= 0x10
+    else failure
+        S-->>A: SNSPartyLockFailure<br/>(party_id)
+    end
+    end
+
+    rect rgb(40, 60, 40)
+    Note over A,B: Unlock Party
+    A->>S: SNSPartyUnlockRequest<br/>(login_session_id)
+    alt success
+        S-->>A: SNSPartyUnlockSuccess
+        S-->>A: SNSPartyUnlockNotify<br/>(party_id)
+        S-->>B: SNSPartyUnlockNotify<br/>(party_id)
+        Note over A,B: dirty_flags &= ~0x10
+    else failure
+        S-->>A: SNSPartyUnlockFailure<br/>(party_id)
+    end
+    end
+</pre>
+</div>
+
+<h3>Member Data Update</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Updater)
+    participant S as Server
+    participant B as Client B (Member)
+
+    A->>S: SNSPartyMemberUpdate<br/>(login_session_id, data)
+    alt success
+        S-->>A: SNSPartyUpdateMemberSuccess<br/>(member_id, party_id)
+        S-->>B: SNSPartyUpdateMemberNotify<br/>(party_id, member_id, member_json)
+        Note over B: Decodes JSON into member's CJson slot
+    else failure
+        S-->>A: SNSPartyUpdateMemberFailure<br/>(party_id, error_code)
+    end
+</pre>
+</div>
+
+<h3>Party Data Update</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Host)
+    participant S as Server
+    participant B as Client B (Member)
+
+    A->>S: SNSPartyUpdateRequest<br/>(login_session_id, party_json)
+    alt success
+        S-->>A: SNSPartyUpdateSuccess
+        S-->>A: SNSPartyUpdateNotify<br/>(party_id, party_json)
+        S-->>B: SNSPartyUpdateNotify<br/>(party_id, party_json)
+        Note over A,B: Decode JSON into party_json CJson.<br/>If lobby_id changes: fire lobby delegate.
+    else failure
+        S-->>A: SNSPartyUpdateFailure<br/>(party_id, error_code)
+    end
+</pre>
+</div>
+
+<h3>Leave + Auto-Disband</h3>
+<div class="diagram-container">
+<pre class="mermaid">
+sequenceDiagram
+    participant A as Client A (Leaver)
+    participant S as Server
+    participant B as Client B (Remaining)
+
+    A->>S: SNSPartyLeaveRequest<br/>(login_session_id)
+    alt success (members remain)
+        S-->>A: SNSPartyLeaveSuccess
+        S-->>B: SNSPartyLeaveNotify<br/>(party_id, member_id)
+        Note over B: Removes A from local member list
+        Note over S: If A was host, auto-pass to next member
+        S-->>B: SNSPartyPassNotify<br/>(party_id, new_owner_id)
+    else success (last member)
+        S-->>A: SNSPartyLeaveSuccess
+        Note over S: Party destroyed (no members remain)
+    else failure
+        S-->>A: SNSPartyLeaveFailure<br/>(party_id, error_code)
+    end
+</pre>
+</div>
+
+<!-- ================================================================== -->
+<!-- Scripts -->
+<!-- ================================================================== -->
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'dark',
+  sequence: {
+    actorMargin: 80,
+    noteMargin: 10,
+    messageFontSize: 13,
+    noteFontSize: 12,
+    wrap: true,
+    width: 200,
+  },
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@viz-js/viz@3.11.0/lib/viz-standalone.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const viz = await Viz.instance();
+
+  const graphs = {
+    'fc-lifecycle': `
+      digraph PartyLifecycle {
+        rankdir=TB;
+        bgcolor="transparent";
+        node [shape=box style="rounded,filled" fillcolor="#16213e" fontcolor="#e0e0e0" color="#0f3460" fontname="Inter,sans-serif" fontsize=11];
+        edge [color="#533483" fontcolor="#888" fontname="Inter,sans-serif" fontsize=10];
+
+        start [label="No Party" shape=ellipse fillcolor="#533483"];
+        creating [label="CreateRequest\\n(max_members, json)"];
+        active [label="Party Active\\n(unlocked)" fillcolor="#0f3460"];
+        locked [label="Party Active\\n(locked)" fillcolor="#0f3460"];
+        joining [label="JoinRequest /\\nRespondToInvite"];
+
+        start -> creating [label="host initiates"];
+        creating -> active [label="CreateSuccess"];
+        creating -> start [label="CreateFailure"];
+
+        active -> joining [label="new member"];
+        joining -> active [label="JoinSuccess +\\nJoinNotify"];
+        joining -> active [label="JoinFailure\\n(back to existing state)"];
+
+        active -> locked [label="LockRequest →\\nLockNotify"];
+        locked -> active [label="UnlockRequest →\\nUnlockNotify"];
+
+        active -> active [label="KickNotify\\n(remove member)"];
+        locked -> locked [label="KickNotify\\n(remove member)"];
+        active -> active [label="PassNotify\\n(change owner)"];
+        locked -> locked [label="PassNotify\\n(change owner)"];
+
+        active -> start [label="LeaveRequest\\n(last member)"];
+        active -> active [label="LeaveNotify\\n(member leaves)"];
+        locked -> start [label="LeaveRequest\\n(last member)"];
+        locked -> locked [label="LeaveNotify\\n(member leaves)"];
+      }
+    `,
+
+    'fc-invite': `
+      digraph InviteFlow {
+        rankdir=LR;
+        bgcolor="transparent";
+        node [shape=box style="rounded,filled" fillcolor="#16213e" fontcolor="#e0e0e0" color="#0f3460" fontname="Inter,sans-serif" fontsize=11];
+        edge [color="#533483" fontcolor="#888" fontname="Inter,sans-serif" fontsize=10];
+
+        idle [label="No Invite" shape=ellipse fillcolor="#533483"];
+        sent [label="Invite Sent\\n(host side)"];
+        pending [label="Invite Pending\\n(invitee side)"];
+        joined [label="In Party" shape=doubleoctagon fillcolor="#0f3460"];
+        rejected [label="Rejected" shape=ellipse fillcolor="#533483"];
+
+        idle -> sent [label="SendInviteRequest"];
+        sent -> pending [label="InviteNotify\\n(delivered to invitee)"];
+        sent -> idle [label="InviteResponse\\n(ack to host)"];
+        pending -> joined [label="RespondToInvite\\n(param=1, accept)"];
+        pending -> rejected [label="RespondToInvite\\n(param=0, reject)"];
+        joined -> idle [label="JoinSuccess +\\nJoinNotify"];
+      }
+    `,
+
+    'fc-lock': `
+      digraph LockState {
+        rankdir=TB;
+        bgcolor="transparent";
+        node [shape=box style="rounded,filled" fillcolor="#16213e" fontcolor="#e0e0e0" color="#0f3460" fontname="Inter,sans-serif" fontsize=11];
+        edge [color="#533483" fontcolor="#888" fontname="Inter,sans-serif" fontsize=10];
+
+        unlocked [label="Unlocked\\n(joinable)" fillcolor="#0f3460"];
+        locked [label="Locked\\n(not joinable)" fillcolor="#e94560" fontcolor="#fff"];
+
+        unlocked -> locked [label="LockRequest →\\nLockSuccess +\\nLockNotify"];
+        locked -> unlocked [label="UnlockRequest →\\nUnlockSuccess +\\nUnlockNotify"];
+        unlocked -> unlocked [label="LockFailure\\n(no change)"];
+        locked -> locked [label="UnlockFailure\\n(no change)"];
+      }
+    `,
+
+    'fc-pass': `
+      digraph PassOwnership {
+        rankdir=TB;
+        bgcolor="transparent";
+        node [shape=box style="rounded,filled" fillcolor="#16213e" fontcolor="#e0e0e0" color="#0f3460" fontname="Inter,sans-serif" fontsize=11];
+        edge [color="#533483" fontcolor="#888" fontname="Inter,sans-serif" fontsize=10];
+
+        a_host [label="A is Host" fillcolor="#0f3460"];
+        request [label="PassOwnershipRequest\\n(target = B)"];
+        b_host [label="B is Host" fillcolor="#0f3460"];
+        fail [label="PassFailure" shape=ellipse fillcolor="#533483"];
+
+        a_host -> request [label="A initiates"];
+        request -> b_host [label="PassSuccess +\\nPassNotify to all"];
+        request -> fail [label="error"];
+        fail -> a_host [label="no change"];
+      }
+    `,
+  };
+
+  for (const [id, dot] of Object.entries(graphs)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    try {
+      const svg = viz.renderSVGElement(dot);
+      el.appendChild(svg);
+    } catch (e) {
+      el.textContent = 'Render error: ' + e.message;
+    }
+  }
+});
+</script>
+
+</body>
+</html>

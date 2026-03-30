@@ -46,24 +46,30 @@ enum SNSFriendInviteErrorCode {
 // Friend Request Messages (client → server)
 // ============================================================================
 
-// Request the full friend list from the server.
+// Request a refresh of the full friend list from the server.
 //
 // Binary wire: 0x20 fixed (routing_id + local_user_uuid + session_guid)
 // Hash: 0xdcfa94680e8d19fc
 // Sender: CNSRADFriends::Refresh()
 // Source: echovr-social-re-answers round 1 Q6, Q7
-message SNSFriendListRequestMessage {
+//
+// Note: The hash lookup canonical name is "SNSFriendListRefreshRequest".
+message SNSFriendListRefreshRequestMessage {
   // Session login UUID of the requester.
   string login_session_id = 1;
 }
 
-// Sync friend state with server.
+// Subscribe to friend status change notifications.
+// After subscribing, the server sends SNSFriendStatusNotifyMessage
+// when any friend's online status changes.
 //
-// Binary wire: 0x20 fixed (same format as ListRequest)
+// Binary wire: 0x20 fixed (same format as ListRefreshRequest)
 // Hash: 0xcdc02fd1dbee3aaa
 // Sender: CNSRADFriends::Sync()
 // Source: echovr-social-re-answers round 1 Q6, Q7
-message SNSFriendSyncRequestMessage {
+//
+// Note: The hash lookup canonical name is "SNSFriendListSubscribeRequest".
+message SNSFriendListSubscribeRequestMessage {
   // Session login UUID of the requester.
   string login_session_id = 1;
 }
@@ -135,6 +141,15 @@ message SNSFriendRemoveRequestMessage {
   string login_session_id = 1;
   // User ID of the friend to remove.
   uint64 target_user_id = 2;
+}
+
+// Unsubscribe from friend status change notifications.
+//
+// Hash: 0x9c7009ae436df014
+// Source: nakama server/evr/core_hash_lookup.go
+message SNSFriendListUnsubscribeRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
 }
 
 // ============================================================================

@@ -1,0 +1,196 @@
+/**
+ * Activity system SNS messages.
+ *
+ * Source: echovr-reconstruction src/pnsrad/Social/CNSRADActivities.h,
+ *         nakama server/evr/types.go (stub declarations),
+ *         nakama server/evr/core_hash_lookup.go (hash mappings)
+ *
+ * The activity system provides three independent contexts — daily, weekly,
+ * and event — each with a list request/response and reward claim flow.
+ * CNSRADActivities (pnsrad.dll) processes all three contexts via
+ * process_all_activities() and update_timed_activities().
+ *
+ * Binary wire format details are partially reverse-engineered. List responses
+ * use 0x28-byte payloads; reward results use 0x20-byte payloads. Exact field
+ * layouts beyond payload size are not yet confirmed.
+ *
+ * Note: The three reward request hashes are shared with party messages
+ * (Daily shares with SNSPartyKickRequest, Weekly shares with
+ * SNSPartyRespondToInviteRequest, Event shares with
+ * SNSPartyPassOwnershipRequest). This hash-sharing pattern is consistent
+ * with other message pairs in the protocol.
+ */
+syntax = "proto3";
+
+package gameservice.v1;
+
+option csharp_namespace = "Nevr.Gameservice.V1";
+option go_package = "buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/gameservice/v1;gameservicev1";
+option java_multiple_files = true;
+option java_outer_classname = "ActivitiesProto";
+option java_package = "com.echotools.nevr.gameservice.v1";
+
+// ============================================================================
+// Daily Activity Messages
+// ============================================================================
+
+// Request the daily activity list.
+//
+// Hash: 0x2643b68cd8c5b784
+// Sender: CNSRADActivities context 0
+message SNSActivityDailyListRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Daily activity list response.
+//
+// Binary wire: 0x28-byte payload
+// Hash: 0xd344915d0e298559
+// Handler: CNSRADActivities ActivityResponse1 @ pnsrad.dll 0x180080f40
+message SNSActivityDailyListResponseMessage {
+  // Raw activity list data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x28-byte fixed payload.
+  bytes data = 1;
+}
+
+// Request to claim a daily activity reward.
+//
+// Hash: 0xff02bf488e77bcba (shared with SNSPartyKickRequest)
+// Sender: CNSRADActivities context 0
+message SNSActivityDailyRewardRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Daily activity reward claim succeeded.
+//
+// Binary wire: 0x20-byte payload
+// Hash: 0xff03af5a9877bcbd
+// Handler: CNSRADActivities ActivityNotify1 @ pnsrad.dll 0x180081630
+message SNSActivityDailyRewardSuccessMessage {
+  // Raw reward data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x20-byte fixed payload.
+  bytes data = 1;
+}
+
+// Daily activity reward claim failed.
+//
+// Binary wire: 0x20-byte payload
+// Hash: 0xff16bb509767bdab
+// Handler: CNSRADActivities ActivityNotify2 @ pnsrad.dll 0x180081500
+message SNSActivityDailyRewardFailureMessage {
+  // Raw failure data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x20-byte fixed payload.
+  bytes data = 1;
+}
+
+// ============================================================================
+// Weekly Activity Messages
+// ============================================================================
+
+// Request the weekly activity list.
+//
+// Hash: 0x82c13b3780f54ca0
+// Sender: CNSRADActivities context 1
+message SNSActivityWeeklyListRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Weekly activity list response.
+//
+// Binary wire: 0x28-byte payload
+// Hash: 0x3b1a508f05b734b1
+// Handler: CNSRADActivities ActivityResponse2 @ pnsrad.dll 0x1800880d0
+message SNSActivityWeeklyListResponseMessage {
+  // Raw activity list data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x28-byte fixed payload.
+  bytes data = 1;
+}
+
+// Request to claim a weekly activity reward.
+//
+// Hash: 0xeaf428c8a8a5cd2a (shared with SNSPartyRespondToInviteRequest)
+// Sender: CNSRADActivities context 1
+message SNSActivityWeeklyRewardRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Weekly activity reward claim succeeded.
+//
+// Binary wire: 0x20-byte payload
+// Hash: 0xeaf538dabea5cd2d
+// Handler: CNSRADActivities ActivityNotify3 @ pnsrad.dll 0x1800887c0
+message SNSActivityWeeklyRewardSuccessMessage {
+  // Raw reward data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x20-byte fixed payload.
+  bytes data = 1;
+}
+
+// Weekly activity reward claim failed.
+//
+// Binary wire: 0x20-byte payload
+// Hash: 0xeae02cd0b1b5cc3b
+// Handler: CNSRADActivities ActivityNotify4 @ pnsrad.dll 0x180088690
+message SNSActivityWeeklyRewardFailureMessage {
+  // Raw failure data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x20-byte fixed payload.
+  bytes data = 1;
+}
+
+// ============================================================================
+// Event Activity Messages
+// ============================================================================
+
+// Request the event activity list.
+//
+// Hash: 0xe1f0eded499af136
+// Sender: CNSRADActivities context 2
+message SNSActivityEventListRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Event activity list response.
+//
+// Binary wire: 0x28-byte payload
+// Hash: 0xca4abe0eb4a4a0cf
+// Handler: CNSRADActivities ActivityResponse3 @ pnsrad.dll 0x180081810
+message SNSActivityEventListResponseMessage {
+  // Raw activity list data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x28-byte fixed payload.
+  bytes data = 1;
+}
+
+// Request to claim an event activity reward.
+//
+// Hash: 0x352f9d0e16001420 (shared with SNSPartyPassOwnershipRequest)
+// Sender: CNSRADActivities context 2
+message SNSActivityEventRewardRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
+// Event activity reward claim succeeded.
+//
+// Binary wire: 0x20-byte payload
+// Hash: 0x352e8d1c00001427
+// Handler: CNSRADActivities ActivityNotify5 @ pnsrad.dll 0x180081f10
+message SNSActivityEventRewardSuccessMessage {
+  // Raw reward data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x20-byte fixed payload.
+  bytes data = 1;
+}
+
+// Event activity reward claim failed.
+//
+// Binary wire: 0x20-byte payload
+// Hash: 0x353b99160f101531
+// Handler: CNSRADActivities ActivityNotify6 @ pnsrad.dll 0x180081de0
+message SNSActivityEventRewardFailureMessage {
+  // Raw failure data. Field layout not yet fully reverse-engineered.
+  // Binary: 0x20-byte fixed payload.
+  bytes data = 1;
+}
