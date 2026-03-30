@@ -174,6 +174,39 @@ message SNSPartyUnlockRequestMessage {
   string login_session_id = 1;
 }
 
+// Update party-level data (JSON). Host only.
+//
+// Binary wire: 0x28 fixed (SNSPartyPayload) + variable (party_json)
+// Sender: CNSRADParty::UpdateLobbyData
+// Source: nakama server/evr/types.go (stub)
+message SNSPartyUpdateRequestMessage {
+  // Session login UUID of the requester (must be host).
+  string login_session_id = 1;
+  // Updated party JSON data.
+  string party_json = 2;
+}
+
+// Update member-level data (JSON).
+//
+// Binary wire: variable
+// Sender: CNSRADParty (member data update path)
+// Source: nakama server/evr/types.go (stub)
+message SNSPartyUpdateMemberRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+  // Updated member JSON data.
+  string member_json = 2;
+}
+
+// Request a refresh of the pending invite list.
+//
+// Sender: CNSRADParty (invite list refresh path)
+// Source: nakama server/evr/types.go (stub)
+message SNSPartyInviteListRefreshRequestMessage {
+  // Session login UUID of the requester.
+  string login_session_id = 1;
+}
+
 // ============================================================================
 // Party Response Messages (server → client)
 // ============================================================================
@@ -315,6 +348,17 @@ message SNSPartyKickSuccessMessage {
   uint64 kick_id = 2;
 }
 
+// Kick failed.
+//
+// Handler: CNSRADParty::KickFailureCB
+// Source: nakama server/evr/types.go (stub)
+message SNSPartyKickFailureMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // Error code.
+  SNSPartyErrorCode error_code = 2;
+}
+
 // Kick notification. Sent to ALL party members (including the kicked one).
 //
 // Binary wire: 0x18 fixed (party_id + kick_id)
@@ -340,6 +384,17 @@ message SNSPartyPassSuccessMessage {
   uint64 party_id = 1;
   // User ID of the new owner.
   uint64 pass_id = 2;
+}
+
+// Ownership transfer failed.
+//
+// Handler: CNSRADParty::PassFailureCB
+// Source: nakama server/evr/types.go (stub)
+message SNSPartyPassFailureMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // Error code.
+  SNSPartyErrorCode error_code = 2;
 }
 
 // Ownership transfer notification. Sent to all party members.
@@ -499,6 +554,27 @@ message SNSPartyLockFailureMessage {
 message SNSPartyLockNotifyMessage {
   // Party ID (handler validates match).
   uint64 party_id = 1;
+}
+
+// Unlock failed.
+//
+// Binary wire: party_id (u64) at STcpMsg+0x08
+// Handler: CNSRADParty::UnlockFailureCB
+// Source: nakama server/evr/types.go (stub)
+message SNSPartyUnlockFailureMessage {
+  // Party ID.
+  uint64 party_id = 1;
+}
+
+// Party data update failed.
+//
+// Handler: CNSRADParty::UpdateFailureCB
+// Source: nakama server/evr/types.go (stub)
+message SNSPartyUpdateFailureMessage {
+  // Party ID.
+  uint64 party_id = 1;
+  // Error code.
+  SNSPartyErrorCode error_code = 2;
 }
 
 // Unlock succeeded. No-op acknowledgment.
