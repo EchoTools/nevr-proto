@@ -91,6 +91,9 @@ message EchoArenaHeader {
   // Default skeleton layout for all players. Individual players can
   // override via PlayerBones.skeleton_override.
   SkeletonLayout skeleton = 9;
+
+  // Session server IP (session constant; written once).
+  string session_ip = 10;
 }
 
 /**
@@ -149,6 +152,18 @@ message EchoArenaFrame {
 
   // Events that occurred during this frame.
   repeated EchoEvent events = 12;
+
+  // Echo Combat payload state. Absent entirely in arena matches.
+  optional PayloadState payload = 13;
+
+  // Raw analog shoulder (trigger/grip) input of the *capture client* — primary
+  // + alternate, per hand. Session-level like vr_root: only the recording
+  // client's own input exists, not remote players'. 0.0 when not pressed (free
+  // on the wire).
+  float left_shoulder_pressed = 14;
+  float right_shoulder_pressed = 15;
+  float left_shoulder_pressed_2 = 16;
+  float right_shoulder_pressed_2 = 17;
 }
 
 /**
@@ -158,6 +173,18 @@ message DiscState {
   spatial.v1.Pose pose = 1;
   spatial.v1.Vec3 velocity = 2;
   uint32 bounce_count = 3;
+}
+
+/**
+ * Echo Combat payload state. Only present on EchoArenaFrame in combat/payload
+ * matches — absent entirely (zero wire cost) in arena.
+ */
+message PayloadState {
+  float multiplier = 1;
+  int32 checkpoint = 2;
+  float distance = 3;
+  int32 defenders = 4;
+  float speed = 5;
 }
 
 /**
@@ -182,6 +209,9 @@ message PlayerState {
 
   // Network latency in milliseconds.
   uint32 ping = 8;
+
+  // Per-frame network packet-loss ratio for this player (0.0 when none).
+  float packet_loss_ratio = 9;
 }
 
 /**
@@ -226,6 +256,8 @@ message EchoEvent {
     PlayerLeft player_left = 21;
     PlayerSwitchedTeam player_switched_team = 22;
     EmotePlayed emote_played = 23;
+    LoadoutChanged loadout_changed = 24;
+    GrabChanged grab_changed = 25;
 
     // Disc events (30-39)
     DiscPossessionChanged disc_possession_changed = 30;
@@ -317,6 +349,26 @@ message EmotePlayed {
   }
   int32 player_slot = 1;
   EmoteType emote = 2;
+}
+
+// Loadout (weapon/ordnance/tac-mod) changes rarely — on spawn or pickup — so
+// it is event-driven, not a per-frame field. Seeded for every player at frame
+// 0; reconstruct the per-frame loadout by replaying these via the Session layer
+// (same pattern as the roster). Empty strings in arena (no combat loadout).
+message LoadoutChanged {
+  int32 player_slot = 1;
+  string weapon = 2;
+  string ordnance = 3;
+  string tac_mod = 4;
+}
+
+// Grab state (what each hand is holding) changes occasionally during play, so
+// it is event-driven, not per-frame. Seeded at frame 0; reconstruct per-frame
+// via the Session layer. Empty string = holding nothing in that hand.
+message GrabChanged {
+  int32 player_slot = 1;
+  string left_holding = 2;
+  string right_holding = 3;
 }
 
 // Disc events --------------------------------------------------------------
