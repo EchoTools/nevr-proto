@@ -1,0 +1,39 @@
+# Local Go code generation for nevr-proto.
+#
+# nevr-proto is proto-only; the canonical Go SDK is published to the Buf Schema
+# Registry (buf.build/echotools/nevr-api) and consumed by downstream repos (e.g.
+# tape) as `buf.build/gen/go/echotools/nevr-api/protocolbuffers/go`.
+#
+# This file reproduces that SAME module LOCALLY so proto changes are red-green
+# testable in a consumer BEFORE any BSR publish. It must stay byte-for-byte
+# API-compatible with the BSR SDK:
+#   - plugin: buf.build/protocolbuffers/go pinned to v1.36.11 (the exact BSR gen)
+#   - Hybrid API (default_api_level=API_HYBRID) — the BSR SDK is generated in the
+#     hybrid layout: each message has exported struct fields (protogen "hybrid.v1")
+#     PLUS opaque accessors/builders, shipped as the dual build-tagged pair
+#     (*.pb.go with `//go:build !protoopaque` + *_protoopaque.pb.go with
+#     `//go:build protoopaque`). Matching this keeps consumer code — including
+#     struct literals like &EchoArenaFrame{GameStatus: ...} — compiling
+#     identically. (API_OPAQUE would emit unexported xxx_hidden_* fields and
+#     break those literals.)
+#   - output honors each file's `go_package` import path, so files land under
+#     gen/go/buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/<pkg>/...
+#     i.e. a self-contained module rooted at that path (see gen/go/.../go.mod).
+#
+# Dev loop (see docs/local-codegen.md):
+#   1. buf generate
+#   2. in the consumer (tape), add a DEV-ONLY replace directive pointing at the
+#      generated module root, then build/test.
+#   3. revert the replace before committing the consumer.
+#
+# `gen/` is gitignored; generated code is never committed here.
+version: v2
+
+managed:
+  enabled: false
+
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    out: gen/go
+    opt:
+      - default_api_level=API_HYBRID
