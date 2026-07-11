@@ -198,13 +198,17 @@ message PlayerState {
   spatial.v1.Pose right_hand = 5;
   spatial.v1.Vec3 velocity = 6;
 
-  // Packed boolean flags:
-  // bit 0: stunned
-  // bit 1: invulnerable
-  // bit 2: blocking
-  // bit 3: possession
-  // bit 4: is_emote_playing
-  // bits 5-31: reserved
+  // Packed boolean flags + team index:
+  //   bit 0: stunned
+  //   bit 1: invulnerable
+  //   bit 2: blocking
+  //   bit 3: possession
+  //   bit 4: is_emote_playing
+  //   bits 5-6: team index (0=blue, 1=orange, 2=spectator) — REQUIRED for
+  //             team reconstruction; a writer that leaves these zero collapses
+  //             all players onto the blue team. See tape mapping.go mapPlayers
+  //             / reconstruct.go reconstructTeams.
+  //   bits 7-31: reserved
   uint32 flags = 7;
 
   // Network latency in milliseconds.
