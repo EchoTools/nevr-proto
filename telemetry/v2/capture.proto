@@ -43,6 +43,15 @@ message CaptureHeader {
   // Core capture format version. For this schema it must be 2.
   uint32 format_version = 3;
 
+  // Format MINOR/PATCH (SemVer). MAJOR is format_version. A reader that
+  // understands MAJOR=2 must read any 2.x file; unknown minors add only
+  // optional fields. Absent (0) on pre-2.1 captures.
+  uint32 format_minor = 5;
+  uint32 format_patch = 6;
+
+  // Materialization of this capture's frames. UNSPECIFIED == SPARSE.
+  FrameEncoding frame_encoding = 7;
+
   // Arbitrary metadata (game version, server IP, recorder build, etc).
   map<string, string> metadata = 4;
 
@@ -156,4 +165,14 @@ enum EventType {
 
   // Misc
   EVENT_TYPE_GENERIC = 50;
+}
+
+// How each Frame's game payload is materialized. UNSPECIFIED is read as SPARSE
+// (pre-2.1 captures have no field set), so sparse is the safe zero behavior.
+// SPARSE = event-sourced (identity/loadout/scores reconstructed by replay);
+// DENSE = every field materialized per frame (Frame.payload = echo_arena_dense).
+enum FrameEncoding {
+  FRAME_ENCODING_UNSPECIFIED = 0;
+  FRAME_ENCODING_SPARSE = 1;
+  FRAME_ENCODING_DENSE = 2;
 }

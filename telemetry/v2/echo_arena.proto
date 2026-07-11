@@ -420,6 +420,12 @@ message GoalScored {
   int32 scorer_slot = 6;
   // Slot of the assisting player. Absent if no assist.
   optional int32 assist_slot = 7;
+  // Scorer / assister display names from the engine (v1 LastScore). Empty when
+  // unknown. Authoritative scorer IDENTITY at the GoalScored level: prefer a
+  // non-empty person_scored over scorer_slot, which is 0 both for "slot 0" and
+  // "unresolved" (the real scorer slot rides the parallel PlayerGoal event).
+  string person_scored = 8;
+  string assist_scored = 9;
 }
 
 message PlayerGoal {
