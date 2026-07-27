@@ -321,6 +321,7 @@ message EchoEvent {
     EmotePlayed emote_played = 23;
     LoadoutChanged loadout_changed = 24;
     GrabChanged grab_changed = 25;
+    PlayerInfoUpdated player_info_updated = 26;
 
     // Disc events (30-39)
     DiscPossessionChanged disc_possession_changed = 30;
@@ -403,6 +404,27 @@ message PlayerSwitchedTeam {
   int32 player_slot = 1;
   Role new_role = 2;
   Role prev_role = 3;
+}
+
+// PlayerInfoUpdated corrects roster attributes after the join snapshot.
+//
+// jersey_number and level are session-constant by intent and are carried by
+// PlayerJoined / EchoArenaHeader.initial_roster. But the engine reports both as
+// 0 for roughly the first two frames after a player joins, so a recorder that
+// latches the join frame captures the wrong value for the rest of the session.
+// Measured: a player joining at frame 243 read (0,0) on frames 243-244 and
+// (1,1) on the remaining 12,572 frames of the capture.
+//
+// Recording the correction as a delta keeps the round-trip exact for BOTH the
+// glitched frames and the settled ones — a heuristic that discarded the join
+// value could not, since jersey 0 is legitimate.
+//
+// Emitted only on an actual change: zero events in a capture where the engine
+// behaves.
+message PlayerInfoUpdated {
+  int32 player_slot = 1;
+  int32 jersey_number = 2;
+  int32 level = 3;
 }
 
 message EmotePlayed {

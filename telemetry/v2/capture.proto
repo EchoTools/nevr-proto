@@ -149,6 +149,7 @@ enum EventType {
   // from CaptureFooter.event_index entirely and no index scan could find them.
   EVENT_TYPE_LOADOUT_CHANGED = 14;
   EVENT_TYPE_GRAB_CHANGED = 15;
+  EVENT_TYPE_PLAYER_INFO_UPDATED = 16;
 
   // Disc events
   EVENT_TYPE_DISC_POSSESSION_CHANGED = 20;
