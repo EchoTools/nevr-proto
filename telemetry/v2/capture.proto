@@ -144,6 +144,12 @@ enum EventType {
   EVENT_TYPE_PLAYER_SWITCHED_TEAM = 12;
   EVENT_TYPE_EMOTE_PLAYED = 13;
 
+  // EchoEvent defines loadout_changed and grab_changed but this enum had no
+  // value for either, so a writer that indexes events by type dropped them
+  // from CaptureFooter.event_index entirely and no index scan could find them.
+  EVENT_TYPE_LOADOUT_CHANGED = 14;
+  EVENT_TYPE_GRAB_CHANGED = 15;
+
   // Disc events
   EVENT_TYPE_DISC_POSSESSION_CHANGED = 20;
   EVENT_TYPE_DISC_THROWN = 21;
@@ -162,6 +168,7 @@ enum EventType {
   EVENT_TYPE_PLAYER_INTERCEPTION = 45;
   EVENT_TYPE_PLAYER_ASSIST = 46;
   EVENT_TYPE_PLAYER_SHOT_TAKEN = 47;
+  EVENT_TYPE_PLAYER_STATS_UPDATED = 48;
 
   // Misc
   EVENT_TYPE_GENERIC = 50;

@@ -51,6 +51,13 @@ enum PauseState {
   PAUSE_STATE_PAUSED = 2;
   PAUSE_STATE_UNPAUSING = 3;
   PAUSE_STATE_AUTOPAUSE_REPLAY = 4;
+
+  // The engine emits "none" and "unpaused" as distinct strings and both were
+  // previously narrowed to NOT_PAUSED; "paused_requested" was narrowed to
+  // PAUSED. Both narrowings lost information the round-trip could not recover.
+  // "none" is observed in sampled captures.
+  PAUSE_STATE_NONE = 5;
+  PAUSE_STATE_PAUSED_REQUESTED = 6;
 }
 
 enum Role {
@@ -94,6 +101,20 @@ message EchoArenaHeader {
 
   // Session server IP (session constant; written once).
   string session_ip = 10;
+
+  // Who last changed the match rules, and when (engine `rules_changed_by` /
+  // `rules_changed_at`). Session-constant: measured invariant across every
+  // frame of 15 sampled captures. Commonly the literal "[INVALID]".
+  string rules_changed_by = 11;
+  uint64 rules_changed_at = 12;
+
+  // Team display names, indexed by team (0 blue, 1 orange, 2 spectator).
+  //
+  // Not derivable from Role: private and tournament matches carry custom names
+  // (a sampled capture used "Raptured and Friend" for team 0 across 887
+  // frames). Constant within a capture — measured invariant in 25/25 sampled
+  // captures — so it is written once here rather than per frame.
+  repeated string team_names = 13;
 }
 
 /**
@@ -164,6 +185,31 @@ message EchoArenaFrame {
   float right_shoulder_pressed = 15;
   float left_shoulder_pressed_2 = 16;
   float right_shoulder_pressed_2 = 17;
+
+  // Engine `err_code` and the per-team restart-request flags. Measured 0 on
+  // every frame of every sampled capture, but they are transient request flags
+  // rather than session constants, so they live per-frame: proto3 writes
+  // nothing for a zero value, making an always-zero field free on the wire
+  // while still round-tripping exactly if it ever toggles.
+  int32 err_code = 18;
+  int32 blue_team_restart_request = 19;
+  int32 orange_team_restart_request = 20;
+
+  // Pause sub-state beyond the `pause_state` enum above. Present only while a
+  // pause is in progress, so nil on virtually every frame.
+  optional PauseDetail pause_detail = 21;
+}
+
+// PauseDetail carries the engine PauseState fields that the per-frame
+// `pause_state` enum cannot express: which team is involved and the two
+// countdown timers. Measured to vary in 1-2 of 15 sampled captures — rare, but
+// the timers tick per-frame while a pause resolves, so this rides the frame
+// rather than an event.
+message PauseDetail {
+  Role unpaused_team = 1;
+  Role paused_requested_team = 2;
+  float unpaused_timer = 3;
+  float paused_timer = 4;
 }
 
 /**
@@ -216,6 +262,19 @@ message PlayerState {
 
   // Per-frame network packet-loss ratio for this player (0.0 when none).
   float packet_loss_ratio = 9;
+
+  // Cumulative seconds this player has held the disc, as the engine reports it
+  // (engine `stats.possession_time`).
+  //
+  // Per-frame rather than event-carried: measured 29.4 changes per 100 frames
+  // across 25 sampled captures, because it ticks continuously while a player
+  // holds the disc. The eleven integer counters in the same engine stats block
+  // move only 0.6 times per 100 frames and ride PlayerStatsUpdated instead.
+  //
+  // This is the engine's own value, which includes a pre-capture baseline (a
+  // sampled capture opened at 13.22s) and therefore cannot be reconstructed by
+  // accumulating detected events from frame 0.
+  float possession_time = 10;
 }
 
 /**
@@ -281,6 +340,7 @@ message EchoEvent {
     PlayerInterception player_interception = 55;
     PlayerAssist player_assist = 56;
     PlayerShotTaken player_shot_taken = 57;
+    PlayerStatsUpdated player_stats_updated = 58;
 
     // Misc events (60-69)
     GenericEvent generic_event = 60;
@@ -476,6 +536,34 @@ message PlayerAssist {
 message PlayerShotTaken {
   int32 player_slot = 1;
   int32 total_shots = 2;
+}
+
+// PlayerStatsUpdated carries the engine's own per-player stat block whenever any
+// of its integer counters changes.
+//
+// This is deliberately NOT the same data as the PlayerGoal/PlayerSave/… events
+// above, which are emitted by tape's own sensors. Measured on a real capture,
+// the two disagree: the engine reported 0 stuns and 0 catches for a player over
+// a whole match while the sensors emitted 3 and 5. The engine's counters also
+// carry a pre-capture baseline, so they cannot be rebuilt by accumulating
+// detected events. Round-tripping `stats` requires the engine's numbers.
+//
+// Placed as an event because the integer counters move only 0.6 times per 100
+// frames (25 sampled captures). The twelfth stats field, possession_time, ticks
+// ~29.4 times per 100 frames and lives on PlayerState instead.
+message PlayerStatsUpdated {
+  int32 player_slot = 1;
+  int32 points = 2;
+  int32 saves = 3;
+  int32 goals = 4;
+  int32 stuns = 5;
+  int32 passes = 6;
+  int32 catches = 7;
+  int32 steals = 8;
+  int32 blocks = 9;
+  int32 interceptions = 10;
+  int32 assists = 11;
+  int32 shots_taken = 12;
 }
 
 // Misc events --------------------------------------------------------------
