@@ -76,6 +76,20 @@ enum GoalType {
   GOAL_TYPE_BOUNCE_SHOT = 3;
   GOAL_TYPE_LONG_BOUNCE_SHOT = 4;
   GOAL_TYPE_SELF_GOAL = 5;
+
+  // The engine's goal-type table has eleven entries, contiguous in echovr.exe
+  // at 0x1416e22b0-0x1416e2360. Six were missing here, so a converter mapped
+  // them to UNSPECIFIED and lost the value — SLAM DUNK alone appears in 7 of 30
+  // sampled captures, LONG HEADBUTT in 729 frames of a January 2026 capture.
+  //
+  // Numbered after the originals rather than in engine-table order: renumbering
+  // a published enum is a wire break.
+  GOAL_TYPE_NO_GOAL = 6; // "[NO GOAL]" @0x1416e22b0
+  GOAL_TYPE_SLAM_DUNK = 7; // @0x1416e22c0
+  GOAL_TYPE_HEADBUTT = 8; // @0x1416e2318
+  GOAL_TYPE_LONG_HEADBUTT = 9; // @0x1416e2328
+  GOAL_TYPE_BUMPER_SHOT = 10; // @0x1416e2338
+  GOAL_TYPE_LONG_BUMPER_SHOT = 11; // @0x1416e2348
 }
 
 // ---------------------------------------------------------------------------
