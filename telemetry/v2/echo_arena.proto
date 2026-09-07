@@ -33,16 +33,44 @@ enum GameStatus {
   GAME_STATUS_POST_SUDDEN_DEATH = 9;
 }
 
+// MatchType is a TOMBSTONE. No field references it, and none may be added.
+//
+// It mixed three incompatible encodings in a single enum, which is why it could
+// not be repaired in place:
+//
+//   cross-producted  SOCIAL_PUBLIC, SOCIAL_PRIVATE   (mode x privacy)
+//   mode-only        ARENA, COMBAT, ECHO_PASS, FFA   (mode, privacy unstated)
+//   bare-axis        PRIVATE, TOURNAMENT             (privacy, mode unstated)
+//
+// A single engine symbol therefore had to pick one axis and drop the others.
+// Measured on the shipped converter (tape pkg/conversion/mapping.go:40-47 and
+// reconstruct.go:40, a 7-entry map plus its reverse):
+//
+//   "Echo_Arena_Private"    -> MATCH_TYPE_PRIVATE     -- "arena" is lost
+//   "Echo_Arena_Tournament" -> MATCH_TYPE_TOURNAMENT  -- "arena" is lost again
+//   "Echo_Combat_Private"   -> not in the map at all  -- UNSPECIFIED, and the
+//                              reverse map turns UNSPECIFIED back into "",
+//                              so a real engine gametype round-trips to nothing
+//
+// The fields this enum served are replaced by CaptureHeader.game_type, the
+// engine's own symbol stored verbatim. Everything the three removed fields
+// carried is derivable from it: `_private` and `_tournament` are IN the symbol,
+// as is the mode, and no combination has to be enumerated in advance. Fold case
+// before deriving -- the engine and api/v1 spell it "echo_arena_private" while
+// v1 echoreplay JSON spells it "Echo_Arena_Private".
+//
+// The enum is KEPT rather than deleted, and the reason is a proto3 scoping rule
+// rather than caution: an enum's VALUE names live in the enclosing PACKAGE
+// scope, not inside the enum. Deleting MatchType would silently free eight
+// package-level identifiers in telemetry.v2 whose meanings were wrong, leaving
+// nothing to stop a later author reintroducing MATCH_TYPE_ARENA with the same
+// defect. Reserving them makes that a compile error.
 enum MatchType {
+  reserved 1 to 8;
+
+  reserved "MATCH_TYPE_ARENA", "MATCH_TYPE_COMBAT", "MATCH_TYPE_ECHO_PASS", "MATCH_TYPE_FFA", "MATCH_TYPE_PRIVATE", "MATCH_TYPE_SOCIAL_PRIVATE", "MATCH_TYPE_SOCIAL_PUBLIC", "MATCH_TYPE_TOURNAMENT";
+
   MATCH_TYPE_UNSPECIFIED = 0;
-  MATCH_TYPE_SOCIAL_PUBLIC = 1;
-  MATCH_TYPE_SOCIAL_PRIVATE = 2;
-  MATCH_TYPE_ARENA = 3;
-  MATCH_TYPE_COMBAT = 4;
-  MATCH_TYPE_ECHO_PASS = 5;
-  MATCH_TYPE_FFA = 6;
-  MATCH_TYPE_PRIVATE = 7;
-  MATCH_TYPE_TOURNAMENT = 8;
 }
 
 enum PauseState {
@@ -100,12 +128,34 @@ enum GoalType {
  * Echo Arena session metadata, written once at capture start.
  */
 message EchoArenaHeader {
+  // Fields 3, 5 and 6 -- match_type, private_match, tournament_match -- are
+  // removed and their numbers and names are reserved. This is the FIRST reserved
+  // statement in this schema; there was none before, so treat it as a precedent
+  // being set rather than a pattern being followed.
+  //
+  // All three were three spellings of one fact, and that fact is now carried
+  // once, by CaptureHeader.game_type, as the engine's own symbol:
+  //
+  //   private_match     == the symbol contains "_private"
+  //   tournament_match  == the symbol contains "_tournament"
+  //   match_type        == the symbol itself, without the lossy enum in the way
+  //
+  // Keeping them alongside game_type would mean three derived fields that can
+  // disagree with the thing they are derived from, and nothing to say which one
+  // wins. See the MatchType tombstone above for what the enum lost and the
+  // measurement that shows it.
+  //
+  // Numbers are reserved because reusing a field number silently reinterprets
+  // old bytes; NAMES are reserved as well because a future `bool private_match`
+  // at a new number would read as a restoration and would be a second source of
+  // truth.
+  reserved 3, 5, 6;
+
+  reserved "match_type", "private_match", "tournament_match";
+
   string session_id = 1;
   string map_name = 2;
-  MatchType match_type = 3;
   string client_name = 4;
-  bool private_match = 5;
-  bool tournament_match = 6;
   int32 total_round_count = 7;
   repeated PlayerInfo initial_roster = 8;
 

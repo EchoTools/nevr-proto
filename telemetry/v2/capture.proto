@@ -52,6 +52,49 @@ message CaptureHeader {
   // Materialization of this capture's frames. UNSPECIFIED == SPARSE.
   FrameEncoding frame_encoding = 7;
 
+  // The engine's own game-type symbol, verbatim: "echo_arena",
+  // "echo_arena_private", "echo_combat", "echo_combat_private",
+  // "echo_arena_tournament", and whatever the game adds next. Empty when the
+  // producer observed none.
+  //
+  // DO NOT CONVERT THIS TO AN ENUM. The set is OPEN and it is the ENGINE'S, not
+  // ours -- it grows whenever the game ships a mode, and we do not control when.
+  // An enum is for a closed set you own. Modelling someone else's open set as an
+  // enum makes every new mode a proto edit plus a BSR republish plus a go.mod
+  // bump in every consumer, and until all of that lands the new mode decodes as
+  // UNSPECIFIED and the value is GONE. As a string a new mode costs nothing and
+  // round-trips exactly, forever.
+  //
+  // This is not a new decision here. nevr-common already ships the same shape:
+  // `string mode = 1;` commented `// The game mode, e.g. "echo_arena_private"`,
+  // paired with `string level = 2;`, in message LobbySessionCreateRequest
+  // (nevr-common proto/api/v1/http_v1.proto:98-101 @ 4e367f3).
+  //
+  // Case is the producer's, not ours: the engine and the api/v1 `mode` field use
+  // lowercase ("echo_arena_private"), while v1 echoreplay JSON captures use
+  // Title_Case ("Echo_Arena_Private"). Both are stored verbatim. Anything
+  // deriving meaning from this symbol must fold case; see the reserved block in
+  // echo_arena.proto.
+  string game_type = 8;
+
+  // What wrote this capture -- producer identity and version, e.g.
+  // "nevr-agent/1.4.2" or "nevr-engine/0.1.0". Empty on captures written before
+  // this field existed.
+  //
+  // It distinguishes producer GENERATIONS, not merely versions, and that is the
+  // job it exists for. nevr-agent polls the engine's HTTP JSON endpoint and is
+  // deprecated; a direct engine-memory reader replaces it. Both write this
+  // format. After the cutover nothing else in the file says which one wrote a
+  // given capture, and it cannot be established retroactively.
+  //
+  // It has a reader, not only a writer. Producer-generation quirks are already
+  // documented in this schema and a converter has to key on them: see
+  // PlayerInfoUpdated in echo_arena.proto, where the engine reports
+  // jersey_number and level as 0 for roughly the first two frames after a join
+  // (measured on frames 243-244 of a 12,815-frame capture). Whether such a quirk
+  // applies is a property of the producer, and this is the only field naming it.
+  string producer = 9;
+
   // Arbitrary metadata (game version, server IP, recorder build, etc).
   map<string, string> metadata = 4;
 
@@ -60,6 +103,36 @@ message CaptureHeader {
     EchoArenaHeader echo_arena = 10;
     // Future game headers: 11-99
   }
+
+  // Core (non-game) header fields continue at 100+, deliberately ABOVE the
+  // 11-99 game_header band rather than eating into it: a scalar dropped inside
+  // that band reads to the next author as oneof territory, and the band has to
+  // stay whole for as long as the oneof can grow. The only cost of a field
+  // number above 15 is one extra tag byte, paid once per capture -- nothing,
+  // by the rule stated on Frame.is_keyframe.
+
+  // SHA-256 of the zstd compression dictionary used to write this capture's
+  // frames. Empty when no dictionary was used.
+  //
+  // This field exists because a WRONG dictionary carrying a COLLIDING id returns
+  // wrong telemetry with no error whatsoever. Measured over 10 A/B dictionary
+  // pairs x 200 float-heavy frames: 2200 frames returned WITHOUT ERROR, 633 of
+  // them with WRONG CONTENT -- e.g. frame 0, player 1, truth z=-28.307524, read
+  // z=-7.076881. A MISSING dictionary does fail loudly ("unknown dictionary");
+  // a wrong one does not, because the id is caller-chosen and nothing anywhere
+  // compares dictionary CONTENT. Two operators both starting at the documented
+  // MinPrivateDictionaryID of 32768, or a single retrain under a reused id,
+  // collide with nothing to detect it.
+  // [spritz findings/2026-09-05-tape-bughunt-fable.md F3]
+  //
+  // The reader's obligation, which is the whole point: on open, hash the
+  // dictionary it resolved and compare. A mismatch is a hard error. An empty
+  // value asserts NOTHING and must never be read as agreement.
+  //
+  // The algorithm is in the field name rather than in a companion `algo` enum
+  // on purpose: a future algorithm takes its own field number, which cannot be
+  // misread, whereas a discriminator can be ignored by a reader that assumes.
+  bytes dictionary_sha256 = 100;
 }
 
 /**
@@ -74,6 +147,29 @@ message Frame {
   // Milliseconds since CaptureHeader.created_at.
   // Max duration: ~49.7 days (uint32 overflow). Sufficient for game sessions.
   uint32 timestamp_offset_ms = 2;
+
+  // True on a frame that is self-contained and therefore safe to seek to or
+  // start reading from. Absent (false) on every other frame.
+  //
+  // CaptureFooter.keyframe_index already answers this for a FINISHED FILE. It
+  // cannot answer it for a LIVE STREAM: the footer is by definition the last
+  // record written, so a consumer reading a session still in progress -- which
+  // is the entire nevr-stream case, servers streaming continuously -- has no
+  // index at all and no other way to know where it may begin.
+  //
+  // Cost: free twice over. proto3 writes nothing for a false bool, so every
+  // non-keyframe pays exactly zero bytes; and where it is true it is two bytes
+  // of near-zero entropy through the trained zstd dictionary.
+  //
+  // The rule that decides this, recorded here because this is where it was
+  // decided: a frame field costs (fraction of frames non-default) x (compressed
+  // entropy), NOT (width) x (frame rate). These frames are dictionary-
+  // compressed, so two fields of identical width can differ by an order of
+  // magnitude -- an always-zero field is free (the same reasoning already
+  // applied to err_code in echo_arena.proto) while a float that moves every
+  // frame is not. A HEADER field, by contrast, is written once per capture and
+  // costs nothing worth counting; decide those on clarity, not bytes.
+  bool is_keyframe = 3;
 
   // Game-specific frame payloads.
   oneof payload {
@@ -179,6 +275,20 @@ enum EventType {
 // (pre-2.1 captures have no field set), so sparse is the safe zero behavior.
 // SPARSE = event-sourced (identity/loadout/scores reconstructed by replay);
 // DENSE = every field materialized per frame (Frame.payload = echo_arena_dense).
+//
+// CORRECTED 2026-09-07: the line directly above names `echo_arena_dense`, and
+// NO SUCH FIELD EXISTS. Frame.payload has exactly one member, `echo_arena = 10`;
+// `echo_arena_dense` occurs nowhere in this module except in that sentence. So
+// FRAME_ENCODING_DENSE is currently UNIMPLEMENTABLE: it is a documented reader
+// for a writer that was never built. A writer setting DENSE today would be
+// making a claim no field can carry, and a reader branching on DENSE has nothing
+// to branch to.
+//
+// The stale sentence is left standing rather than rewritten so the defect stays
+// visible. The value is NOT removed and NOT renumbered -- renumbering a
+// published enum is a wire break, by this schema's own rule at GoalType above.
+// Deciding what DENSE should actually mean is an open design question and is
+// deliberately not answered here.
 enum FrameEncoding {
   FRAME_ENCODING_UNSPECIFIED = 0;
   FRAME_ENCODING_SPARSE = 1;
