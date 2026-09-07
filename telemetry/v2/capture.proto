@@ -296,13 +296,34 @@ message CaptureHeader {
   // them IS the dropped-frame signal -- which at a fleet of streaming servers is
   // a question somebody will ask and cannot currently answer from the file.
   //
+  // WRITE THE EFFECTIVE RATE, NOT THE FLAG YOU HAPPEN TO HOLD. A producer may
+  // have more than one knob for this and they are not equals -- nevr-agent has
+  // two for the SAME rate, and a writer that recorded the wrong one would be
+  // wrong in exactly the way this field exists to prevent. Traced in code, not
+  // read off the flag help:
+  //     cmd/agent/agent.go:228   interval = 1s / Frequency
+  //     internal/agent/poller.go:98-99
+  //                              if FPS > 0 { interval = 1s / FPS }   <- OVERRIDE
+  // Both assign the SAME variable, so `--fps` and `--frequency` are two
+  // spellings of one rate rather than two rates. The effective active cadence is
+  // FPS IF NONZERO, ELSE FREQUENCY, and that is the number that belongs here.
+  // This is a writer-side selection, not a schema axis; it does not want a
+  // third field.
+  //
   // It is not inferable from the code either, because it is a per-invocation
   // operator choice and the stack does not agree with itself. Measured
   // 2026-09-07: nevr-agent `--frequency` defaults to 10 Hz
-  // (cmd/agent/agent.go:101); nevr-stream applies a CEILING of 60
-  // (internal/api/service.go:20, `defaultMaxStreamHz`, whose own comment calls
-  // it a ceiling). A ceiling read as a rate is how this field's own cost was
-  // once miscalculated by 30x.
+  // (cmd/agent/agent.go:101) with `--fps` (:112) overriding it; nevr-stream
+  // applies a CEILING of 60 (internal/api/service.go:20, `defaultMaxStreamHz`,
+  // whose own comment calls it a ceiling). A ceiling read as a rate is how this
+  // field's own cost was once miscalculated by 30x.
+  //
+  // AND THERE IS ALREADY A CONSUMER GUESSING. nevr-sentinel converts frames to
+  // seconds using a HARDCODED assumption: `ContinuousStunFrames: 60, // ~2s at
+  // 30Hz` (internal/detector/detector.go:78). Against nevr-agent's DEFAULT of
+  // 10 Hz that 60-frame window is 6 seconds, not 2 -- a 3x error in a detection
+  // threshold, silent, with nothing in the capture able to correct it. This
+  // field is what that code should read instead of assuming.
   uint32 nominal_frame_rate_hz = 101;
 
   // The intended cadence OUTSIDE active gameplay, in Hz. Absent (0) means the
@@ -320,6 +341,20 @@ message CaptureHeader {
   // applies using the frame's own game_status, exactly as the producer did.
   // A gate that cries wolf is worse than no gate, because it trains dismissal of
   // its own true alarms.
+  //
+  // WRITER RULE, AND IT IS A TRAP WORTH NAMING: write this ONLY IF THE PRODUCER
+  // WILL ACTUALLY THROTTLE. Holding a non-zero idle setting is not the same as
+  // throttling. In nevr-agent the setting is on by default (`--idle-fps` 1) but
+  // is gated on a SEPARATE opt-in: `if cfg.ActiveOnly && cfg.IdleFPS > 0 &&
+  // !isActiveGameplay(...)` (internal/agent/poller.go:77). Without
+  // `--active-only` the capture stays at the active rate throughout, and a
+  // writer that copied its idle-fps setting here anyway would tell every
+  // consumer to expect a 1 Hz lobby that never happens -- inventing the same
+  // false alarm from the other direction.
+  //
+  // 0 means "no throttling; nominal applies throughout", and the producer's own
+  // code agrees: its idle interval is INITIALISED to the active interval and
+  // only replaced when throttling is configured (poller.go:106-109).
   uint32 idle_frame_rate_hz = 102;
 
   // 900-999 ARE RESERVED AND MUST NEVER BE ASSIGNED. They are not a future
