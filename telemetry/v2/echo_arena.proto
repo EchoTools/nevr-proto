@@ -180,6 +180,11 @@ message EchoArenaHeader {
   // old bytes; NAMES are reserved as well because a future `bool private_match`
   // at a new number would read as a restoration and would be a second source of
   // truth.
+  // The owner licence this removal was made under, and the CONDITION that makes
+  // it true, are recorded once at CaptureHeader.format_minor in capture.proto --
+  // pointed at rather than restated, because a licence copied to a second site
+  // is a licence that can drift from its own conditions. Read it there before
+  // citing this removal as precedent for another one.
   reserved 3, 5, 6;
 
   reserved "match_type", "private_match", "tournament_match";

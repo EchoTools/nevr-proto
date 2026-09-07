@@ -49,6 +49,67 @@ message CaptureHeader {
   uint32 format_minor = 5;
   uint32 format_patch = 6;
 
+  // ------------------------------------------------------------------------
+  // THE BREAKING-CHANGE LICENCE, AND ITS SCOPE. Read both halves or neither.
+  // ------------------------------------------------------------------------
+  //
+  // Owner, 2026-09-07: "yeah, collapse matchType. definitely." and
+  // "we arent breaking anything because we are working towards firming up the
+  // proto." Earlier the same day: "we are not released yet. and the cost right
+  // now is negligable vs running 60 servers streaming the data to nevr-stream."
+  //
+  // That is a real decision and the collapse above was made under it. It is
+  // recorded here plainly, not as a hedge: three fields and eight enum values
+  // were removed from a published schema on purpose, and it was right.
+  //
+  // THE CONDITION, WHICH IS NOT BACKGROUND. The licence is true BECAUSE nothing
+  // we cannot re-cut consumes this schema at a pinned version yet. That
+  // condition expires. The moment something does, the identical argument
+  // INVERTS: a breaking commit stops being free and becomes a format-version
+  // event. The decision was sound; the PRECEDENT is what needs bounding, and a
+  // precedent quoted without its condition is how a licence outlives its reason.
+  //
+  // THE FALSIFIER, AND IT IS NOT WHAT ANYONE WILL REACH FOR FIRST.
+  //
+  // There is NO local instrument that proves this window is still open. That is
+  // a finding, not an omission, and the obvious candidates were measured and
+  // killed on 2026-09-07 so nobody re-derives them:
+  //
+  //   "the repo is untagged, so nothing is released"  -- FALSE HERE. This repo
+  //     carries 11 tags through v4.5.0, and v4.5.0 IS commit 92bdd2f, the tip
+  //     immediately before this work: 11 tags across 54 commits, roughly one in
+  //     five. Tagging here is routine module versioning, not a release ceremony.
+  //     Worse, the axes differ -- the repo tag major is 4 while this wire
+  //     format_version is 2 -- so a tag says nothing about format stability.
+  //
+  //   "a consumer pins a published version, so it is released" -- FALSE. tape
+  //     has always consumed nevr-api as a pinned BSR version; that is the only
+  //     way buf distributes. By this test the window was NEVER open, which
+  //     contradicts the owner directly. A test that says a window never opened
+  //     cannot be the test for whether it has closed.
+  //
+  //   "some other repo carries a release tag" -- not checkable from here, and
+  //     its subject set GROWS. A falsifier whose subject nobody can enumerate
+  //     is not a falsifier.
+  //
+  // So the check is not on the world, it is ON THE CITER, and that is the only
+  // version of it a stranger can actually run:
+  //
+  //   ANYONE INVOKING THIS LICENCE MUST CITE THE OWNER RULING THAT GRANTED IT
+  //   AND ESTABLISH THAT IT IS STILL CURRENT. SILENCE IS EXPIRY, NOT EXTENSION.
+  //
+  // It is not self-renewing. If you are reading this and cannot establish that
+  // nothing released now depends on this schema, IT DOES NOT APPLY -- ask. The
+  // failure mode of every instrument above is that it fails OPEN, licensing a
+  // break after the window shut; this one fails CLOSED, costing a question.
+  //
+  // Related and deliberately unanswered here: whether the removals above are a
+  // 2.2.0, an amendment to 2.1.0, or a 3.0.0. Removing fields violates the
+  // "unknown minors add only optional fields" contract stated four lines up, by
+  // its own words. Nothing in this .proto sets format_minor -- the producer sets
+  // it at runtime -- so there was nothing to change here, and picking a number
+  // would be legislating. That is the owner's call.
+
   // Materialization of this capture's frames. UNSPECIFIED == SPARSE.
   FrameEncoding frame_encoding = 7;
 
