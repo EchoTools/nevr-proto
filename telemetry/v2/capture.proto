@@ -44,8 +44,28 @@ message CaptureHeader {
   uint32 format_version = 3;
 
   // Format MINOR/PATCH (SemVer). MAJOR is format_version. A reader that
-  // understands MAJOR=2 must read any 2.x file; unknown minors add only
-  // optional fields. Absent (0) on pre-2.1 captures.
+  // understands MAJOR=2 must read any 2.x file. Absent (0) on pre-2.1 captures.
+  //
+  // CORRECTED 2026-09-07. This previously read "unknown minors add only optional
+  // fields." THAT PROMISE IS NOW FALSE: minor 2 removes three EchoArenaHeader
+  // fields and eight MatchType values. It is stated as it actually is rather
+  // than left as a promise the schema has already broken.
+  //
+  // WITHIN 2.x A MINOR MAY REMOVE FIELDS, BUT ONLY WHILE THE FORMAT IS
+  // UNRELEASED -- which is exactly the condition of the licence recorded below,
+  // and exactly the condition that expires. When that licence no longer holds,
+  // this sentence stops being true and a removal needs a MAJOR.
+  //
+  // Why minor 2 rather than amending 2.1.0 in place: 2.1.0 HAS BEEN EMITTED.
+  // Captures on disk carry format_minor 1. The owner ruled they do not count as
+  // released, which is true and is not the same as not existing -- amending in
+  // place would leave two byte-incompatible schemas both stamped 2.1.0 with
+  // nothing able to tell them apart. Bumping makes the change detectable.
+  // Detectable beats tidy.
+  //
+  // Why not MAJOR 3: `3` already has a planned meaning (v2 as archival bridge,
+  // v3 as engine-native) in an open architecture decision, and taking the number
+  // here would collide with a decision that has not been made.
   uint32 format_minor = 5;
   uint32 format_patch = 6;
 
@@ -249,6 +269,58 @@ message CaptureHeader {
   // on purpose: a future algorithm takes its own field number, which cannot be
   // misread, whereas a discriminator can be ignored by a reader that assumes.
   bytes dictionary_sha256 = 100;
+
+  // DO NOT ADD A `dictionary_id` FIELD BESIDE THIS ONE. It was proposed and
+  // rejected 2026-09-07, and the reason is recorded here because the idea is
+  // reasonable enough to be re-proposed: the id is ALREADY IN THE BYTES. zstd's
+  // frame header carries Dictionary_ID (RFC 8878) and the decoder exposes it
+  // (klauspost/compress zstd/decodeheader.go:29 `DictionaryID uint32`, parsed at
+  // :169-173), and tape's codec already decodes that header inside the very
+  // function that would do the comparison (pkg/codec/seekable.go:569,
+  // `hdr.Decode(raw)`). Storing it here would be a second source of truth for a
+  // value the container can already read -- the same defect this schema removed
+  // twice on 2026-09-07 (private_match, derivable from the game_type symbol; an
+  // engine sha1, derivable from the runtime version).
+  //
+  // The id also would not buy the seam it appears to: comparing a stored id
+  // against the frame's id only catches one component disagreeing with itself.
+  // The seam that matters is CONTENT identity -- which dictionary is this really
+  // -- and that is what the hash above is, and it is not recoverable from the
+  // frame header at any price.
+
+  // The cadence the producer INTENDED to record at, in Hz, during active
+  // gameplay. Absent (0) when the producer did not declare one.
+  //
+  // A consumer can measure the OBSERVED cadence from timestamp_offset_ms after
+  // two frames. It cannot infer the INTENDED one, and the difference between
+  // them IS the dropped-frame signal -- which at a fleet of streaming servers is
+  // a question somebody will ask and cannot currently answer from the file.
+  //
+  // It is not inferable from the code either, because it is a per-invocation
+  // operator choice and the stack does not agree with itself. Measured
+  // 2026-09-07: nevr-agent `--frequency` defaults to 10 Hz
+  // (cmd/agent/agent.go:101); nevr-stream applies a CEILING of 60
+  // (internal/api/service.go:20, `defaultMaxStreamHz`, whose own comment calls
+  // it a ceiling). A ceiling read as a rate is how this field's own cost was
+  // once miscalculated by 30x.
+  uint32 nominal_frame_rate_hz = 101;
+
+  // The intended cadence OUTSIDE active gameplay, in Hz. Absent (0) means the
+  // producer did not throttle and nominal_frame_rate_hz applies throughout.
+  //
+  // THIS FIELD IS WHAT MAKES THE ONE ABOVE SAFE, and without it that one would
+  // manufacture the exact false alarm it exists to detect. nevr-agent throttles
+  // when `--active-only` is set: `--idle-fps` defaults to 1 Hz
+  // (cmd/agent/agent.go:118) and applies whenever game_status != "playing"
+  // (internal/agent/poller.go:76). That is a 10x drop, deliberate and correct.
+  // A consumer holding only nominal=10 and observing 1 Hz through a lobby would
+  // report 90% frame loss on a capture that lost nothing.
+  //
+  // So a consumer comparing observed against intended must select which rate
+  // applies using the frame's own game_status, exactly as the producer did.
+  // A gate that cries wolf is worse than no gate, because it trains dismissal of
+  // its own true alarms.
+  uint32 idle_frame_rate_hz = 102;
 
   // 900-999 ARE RESERVED AND MUST NEVER BE ASSIGNED. They are not a future
   // range; they are a permanently empty one, and that is their entire purpose.
