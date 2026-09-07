@@ -43,14 +43,38 @@ enum GameStatus {
 //   bare-axis        PRIVATE, TOURNAMENT             (privacy, mode unstated)
 //
 // A single engine symbol therefore had to pick one axis and drop the others.
-// Measured on the shipped converter (tape pkg/conversion/mapping.go:40-47 and
-// reconstruct.go:40, a 7-entry map plus its reverse):
 //
-//   "Echo_Arena_Private"    -> MATCH_TYPE_PRIVATE     -- "arena" is lost
-//   "Echo_Arena_Tournament" -> MATCH_TYPE_TOURNAMENT  -- "arena" is lost again
-//   "Echo_Combat_Private"   -> not in the map at all  -- UNSPECIFIED, and the
-//                              reverse map turns UNSPECIFIED back into "",
-//                              so a real engine gametype round-trips to nothing
+// CORRECTED 2026-09-07. An earlier version of this comment listed three losses
+// as one kind. They are TWO KINDS and one of them was overstated. The list below
+// was EXECUTED by tape-foreman against tape pkg/conversion @ 7e50cb7 after both
+// of us had only reasoned it from the source -- two readings of the same three
+// files is one observation wearing two names, not corroboration.
+//
+//   "Echo_Arena_Private" -> MATCH_TYPE_PRIVATE -> "Echo_Arena_Private"
+//     THE v1 STRING ROUND-TRIPS INTACT. matchTypeReverse is the literal inverse
+//     (buildReverse, reconstruct.go:61 @ 7e50cb7), so the single key that
+//     produced the value maps back to it. What is lost is EXPRESSIVENESS FOR A
+//     v2 CONSUMER: anything reading MATCH_TYPE_PRIVATE cannot tell arena from
+//     combat, because the enum has one PRIVATE value for both. Real, but it is
+//     not a round-trip loss and the earlier comment implied it was.
+//
+//   "Echo_Combat_Private" -> MATCH_TYPE_UNSPECIFIED -> "" (length 0)
+//     A real engine gametype with NO map entry at all. Observed, not inferred.
+//     THIS is the failure that justifies removing the fields.
+//
+// And the loss is not silent everywhere, which the earlier comment also got
+// wrong. AT CONVERSION it is counted and reported: vocabulary.matchType records
+// the miss (vocabulary.go:92-98) and it reaches an operator through
+// ConvertResult.UnmappedValues (convert.go:260) and cmd/tapedeck/convert.go:165.
+// FOREVER AFTER it is silent: a tape already storing UNSPECIFIED carries no
+// record that anything was dropped, so reconstruction has nothing left to
+// notice. Counted once, at conversion; unmarked from then on.
+//
+// The two BOOLEANS were never MatchType's to lose. mapping.go:195-196 copies
+// session.GetPrivateMatch() and GetTournamentMatch() straight through,
+// independent of the enum. What the enum destroys is the MODE, not the privacy --
+// so removing private_match and tournament_match is a single-source-of-truth
+// decision, not the repair of an existing loss.
 //
 // The fields this enum served are replaced by CaptureHeader.game_type, the
 // engine's own symbol stored verbatim. Everything the three removed fields
@@ -139,6 +163,13 @@ message EchoArenaHeader {
   //   private_match     == the symbol contains "_private"
   //   tournament_match  == the symbol contains "_tournament"
   //   match_type        == the symbol itself, without the lossy enum in the way
+  //
+  // The two booleans were NOT broken before this. They arrived from the engine
+  // on their own fields and never passed through MatchType at all (tape
+  // mapping.go:195-196 @ 7e50cb7). They are removed because they were a SECOND
+  // SOURCE for a fact game_type already carries, not because they were lossy.
+  // Only match_type was lossy. Stated here so the removal is not later read as
+  // a bug fix it was not.
   //
   // Keeping them alongside game_type would mean three derived fields that can
   // disagree with the thing they are derived from, and nothing to say which one
