@@ -10,6 +10,27 @@ lint:
   use:
     - STANDARD
 
+# PACKAGE, not FILE, and this is a decision rather than a default.
+#
+# Neither category is a superset of the other -- they are the file-scoped and
+# package-scoped versions of the same five protections, a symmetric swap.
+# Measured 2026-09-07 by running the mutations rather than reading rule names:
+#
+#   mutation                                    FILE      PACKAGE
+#   delete a field                              CAUGHT    CAUGHT
+#   delete a whole enum                         CAUGHT    CAUGHT
+#   move a message between files, same package  CAUGHT    ALLOWED
+#   delete a file whose contents moved          CAUGHT    ALLOWED
+#
+# So the wire protection is IDENTICAL. What FILE additionally freezes is our
+# .proto file layout, for the life of the package -- and that layout is invisible
+# to a Go consumer: capture.proto and echo_arena.proto share one go_package, and
+# moving a message between them produced a byte-identical generated Go API
+# (221 exported getters, empty diff). The only thing FILE protects that PACKAGE
+# does not is `java_outer_classname`, i.e. which Java class holds the type.
+#
+# REVISIT THIS IF WE EVER SHIP A JAVA CONSUMER. That condition is the falsifier;
+# without it this note would rot into an unexaminable preference.
 breaking:
   use:
     - PACKAGE
