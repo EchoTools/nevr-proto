@@ -105,11 +105,20 @@ message CaptureHeader {
   }
 
   // Core (non-game) header fields continue at 100+, deliberately ABOVE the
-  // 11-99 game_header band rather than eating into it: a scalar dropped inside
-  // that band reads to the next author as oneof territory, and the band has to
-  // stay whole for as long as the oneof can grow. The only cost of a field
-  // number above 15 is one extra tag byte, paid once per capture -- nothing,
-  // by the rule stated on Frame.is_keyframe.
+  // game_header oneof rather than eating into it.
+  //
+  // THE ONEOF'S TERRITORY IS 10-99, NOT 11-99. Field 10 is `echo_arena`, the
+  // member that already exists; 11-99 is the earmark for the members that do
+  // not exist yet. An earlier version of this comment said "the 11-99
+  // game_header band", which is true of the FREE numbers and reads as though 10
+  // were available -- a reader taking a stand-in number from just below the band
+  // collides with echo_arena. Corrected 2026-09-07 after tape-foreman was nearly
+  // caught by exactly that inference; a wire number is expensive to take back.
+  //
+  // A scalar dropped anywhere in 10-99 reads to the next author as oneof
+  // territory, and the range has to stay whole for as long as the oneof can
+  // grow. The only cost of a field number above 15 is one extra tag byte, paid
+  // once per capture -- nothing, by the rule stated on Frame.is_keyframe.
 
   // SHA-256 of the zstd compression dictionary used to write this capture's
   // frames. Empty when no dictionary was used.
