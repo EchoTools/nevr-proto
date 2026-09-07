@@ -138,15 +138,42 @@ message CaptureHeader {
   // echo_arena.proto.
   string game_type = 8;
 
-  // What wrote this capture -- producer identity and version, e.g.
-  // "nevr-agent/1.4.2" or "nevr-engine/0.1.0". Empty on captures written before
-  // this field existed.
+  // THE WHOLE PRODUCING STACK THAT MADE THIS CAPTURE, as a User-Agent string.
+  // Empty on captures written before this field existed.
+  //
+  // GRAMMAR: space-separated `product/version` tokens, most significant first,
+  // with an optional trailing parenthesised comment for things that are not
+  // ours. Deliberately the boring RFC shape, because it is already understood
+  // and already parseable.
+  //
+  //   nevr-runtime/2.4.1 nevr-sentinel/0.3.1 (echovr/1.9.9.1.62_r1)
+  //   nevr-server-rs/1.0.0
+  //
+  // A STRING, NOT STRUCTURED FIELDS, AND IT IS THE SAME TEST AS game_type: the
+  // value space changes under us, therefore string. Two reasons, and neither is
+  // "fewer fields is tidier" -- write that down, because the next reader will
+  // think they are simplifying:
+  //
+  //  (a) THE PARTS ARE NOT INDEPENDENT. nevr-runtime IS the mod, so a working
+  //      runtime implies the binary underneath it. An engine sha1 as its own
+  //      field was a DERIVED fact wearing the costume of a primary one, and a
+  //      derived field is a second source of truth that can disagree with the
+  //      thing it derives from -- the same defect that removed
+  //      EchoArenaHeader.private_match.
+  //
+  //  (b) THE STACK IS BEING REPLACED, NOT VERSIONED. Owner, 2026-09-07: "going
+  //      forward, it wont even be echovr.exe generating .tape, it will the fully
+  //      custom nevr-server-rs." A structured field for a departing component
+  //      becomes a permanently-empty entry on every future capture that every
+  //      reader must then learn to ignore. A string simply stops mentioning an
+  //      engine. THAT ASYMMETRY IS THE ARGUMENT: a field cannot be un-added, but
+  //      a segment can be un-emitted.
   //
   // It distinguishes producer GENERATIONS, not merely versions, and that is the
   // job it exists for. nevr-agent polls the engine's HTTP JSON endpoint and is
-  // deprecated; a direct engine-memory reader replaces it. Both write this
-  // format. After the cutover nothing else in the file says which one wrote a
-  // given capture, and it cannot be established retroactively.
+  // deprecated; a direct engine-memory reader replaces it, and nevr-server-rs
+  // replaces the engine itself. After each cutover nothing else in the file says
+  // what wrote a given capture, and it cannot be established retroactively.
   //
   // It has a reader, not only a writer. Producer-generation quirks are already
   // documented in this schema and a converter has to key on them: see
@@ -154,6 +181,25 @@ message CaptureHeader {
   // jersey_number and level as 0 for roughly the first two frames after a join
   // (measured on frames 243-244 of a 12,815-frame capture). Whether such a quirk
   // applies is a property of the producer, and this is the only field naming it.
+  //
+  // IF A SHA APPEARS IN A COMMENT SEGMENT, WRITE IT AS LOWERCASE HEX. This is
+  // ADVICE AND IT WAS BRIEFLY A CONTRACT: fields `engine_version = 101` and
+  // `engine_sha1 = 102` existed here on 2026-09-07 and were removed the same day
+  // under (a) and (b) above. The lowercase rule was a field contract then and is
+  // only a convention now -- NOTHING PARSES OR ENFORCES IT, and the demotion is
+  // stated so a later reader does not mistake advice for a guarantee.
+  //
+  // The reasoning survives the demotion because it was never about sha1: this
+  // schema already carries a fact spelled two ways by two producers -- game_type,
+  // lowercase from the engine and Title_Case from v1 echoreplay -- and an
+  // unfolded comparison gets the wrong answer WITHOUT ERRORING. Anything
+  // comparing a value out of this string should fold case.
+  //
+  // Field numbers 101 and 102 are FREE, not reserved. Reservation protects old
+  // BYTES from being reinterpreted, and no bytes were ever published carrying
+  // them: they existed only in local commits on this machine and nothing was
+  // pushed, so there is nothing to protect. Reserving them would cost two
+  // numbers to guard a capture that does not exist.
   string producer = 9;
 
   // Arbitrary metadata (game version, server IP, recorder build, etc).
@@ -203,48 +249,6 @@ message CaptureHeader {
   // on purpose: a future algorithm takes its own field number, which cannot be
   // misread, whereas a discriminator can be ignored by a reader that assumes.
   bytes dictionary_sha256 = 100;
-
-  // WHICH ENGINE BINARY PRODUCED THIS DATA. Version string as echovr.exe
-  // reports it, and the SHA-1 of that executable. Both empty when the producer
-  // could not determine them; empty asserts nothing.
-  //
-  // THE REASON IS PROVENANCE, NOT OFFSET DRIFT, and the distinction is written
-  // here because the wrong reason would get these fields deleted. The obvious
-  // justification -- "engine updates move struct offsets, so pin the build" --
-  // IS DEAD. Owner, 2026-09-07: "there will never be another binary." A guard
-  // against engine updates has nothing left to guard against, and the next
-  // person to check that justification would be right to remove the field.
-  //
-  // What survives is different: "there will never be another OFFICIAL binary"
-  // does not mean every capture came from the same bytes. A modded, patched or
-  // stale client is exactly what these identify, and it is unanswerable
-  // retroactively -- once a capture exists, nothing else in it says which
-  // executable made it.
-  //
-  string engine_version = 101;
-
-  // SHA-1, not SHA-256, deliberately: this is IDENTIFICATION, not security, and
-  // it is meant to be comparable against community tooling that already
-  // publishes SHA-1s. Collision resistance is not a property being relied on. As
-  // with dictionary_sha256, the algorithm is in the FIELD NAME so a future one
-  // takes its own number rather than an `algo` discriminator a reader can ignore.
-  //
-  // Lowercase hex, exactly 40 characters, no prefix. The case is PINNED because
-  // an unpinned one is a silent mismatch: this same schema already carries a
-  // fact spelled two ways by two producers (game_type, lowercase from the engine
-  // and Title_Case from v1 echoreplay), and a comparison that does not fold gets
-  // the wrong answer without erroring. Writers emit lowercase; readers fold
-  // before comparing.
-  //
-  // Encoded as a hex STRING while dictionary_sha256 is BYTES. The inconsistency
-  // is deliberate and recorded so it does not read as an oversight: the two have
-  // different readers. dictionary_sha256 is compared machine-to-machine inside
-  // the codec and never shown to anyone, so raw bytes are right. engine_sha1 is
-  // compared against a value a human published somewhere else, so it must be
-  // pasteable and greppable without a decode step. Interop wins where the
-  // counterparty is outside this system; compactness wins where it is not.
-  // Once per capture, so the 40-vs-20 bytes does not enter into it.
-  string engine_sha1 = 102;
 
   // 900-999 ARE RESERVED AND MUST NEVER BE ASSIGNED. They are not a future
   // range; they are a permanently empty one, and that is their entire purpose.
