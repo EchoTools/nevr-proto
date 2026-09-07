@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# nevr-proto pre-commit: formatting and lint. ~1 second.
+#
+# WHY THESE TWO AND NOT MORE: these are the only checks that are both fast enough
+# to run on every commit and deterministic enough that failing them is always the
+# author's problem. Compatibility is NOT checked here -- it belongs on pre-push,
+# because a commit harms nobody and a push publishes.
+#
+# WHY THIS DOES NOT REWRITE YOUR FILES: `buf format -w` would fix these
+# automatically, and it is deliberately not run. A hook that edits your working
+# tree under you changes what you are about to commit after you have read it.
+# The fix command is printed instead; running it is your decision.
+set -uo pipefail
+
+fail=0
+
+if ! out="$(buf format --diff --exit-code 2>&1)"; then
+  echo "pre-commit: FORMATTING" >&2
+  echo "$out" | sed 's/^/  /' >&2
+  echo >&2
+  echo "  fix:  buf format -w" >&2
+  echo >&2
+  fail=1
+fi
+
+if ! out="$(buf lint 2>&1)"; then
+  echo "pre-commit: LINT" >&2
+  echo "$out" | sed 's/^/  /' >&2
+  echo >&2
+  echo "  these are not auto-fixable; edit the files named above" >&2
+  echo >&2
+  fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "pre-commit: BLOCKED. Bypass with --no-verify only if you know why." >&2
+  exit 1
+fi
+exit 0

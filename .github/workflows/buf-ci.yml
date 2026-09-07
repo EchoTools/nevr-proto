@@ -14,16 +14,49 @@ jobs:
       - run: buf format --diff --exit-code
       - run: buf lint
       - run: buf build
-      - name: Check breaking changes
+
+      # On a PR the right baseline is main: this compares the PR head against the
+      # branch it wants to merge into. It is NOT the right baseline for a push to
+      # main -- see the next step for why.
+      - name: Check breaking changes (PR, against main)
         if: github.event_name == 'pull_request'
-        run: buf breaking --against '.git#branch=main'
-      - name: Push to BSR
+        run: |
+          ./scripts/breaking-gate.sh \
+            --target '.git#branch=main' \
+            --commits "origin/${{ github.base_ref }}..HEAD"
+
+      # THIS CONDITION IS LITERALLY IDENTICAL TO THE PUBLISH STEP'S BELOW, AND
+      # THAT IS THE POINT. Previously the breaking check ran on `pull_request`
+      # while the publish ran on a push to main, so under trunk-based development
+      # the check never ran and the next step published anyway. Two conditions
+      # that are supposed to agree, maintained separately, WILL drift; identical
+      # conditions cannot. If you change one, you must change the other, and the
+      # diff will show you that.
+      #
+      # The target must be the REGISTRY, not `.git#branch=main`. On a push to
+      # main, `--against .git#branch=main` compares main WITH ITSELF: it has
+      # exactly one possible outcome and is worse than having no step at all,
+      # because it reads as protection. Measured on a clone with a deleted field
+      # committed to main: `--against .git#branch=main` -> exit 0, silent;
+      # `--against-registry` -> exit 100, caught.
+      - name: Check breaking changes (push to main, against the registry)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          if [ -n "$BUF_TOKEN" ]; then
-            buf push
-          else
-            echo "BUF_TOKEN not configured, skipping BSR push"
-          fi
+          ./scripts/breaking-gate.sh \
+            --target registry \
+            --commits "${{ github.event.before }}..${{ github.sha }}"
+        env:
+          BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
+
+      # NO TOKEN GUARD. The previous version wrapped this in
+      #   if [ -n "$BUF_TOKEN" ]; then buf push; else echo "...skipping"; fi
+      # which made a publish that NEVER HAPPENED indistinguishable from one that
+      # succeeded: the job went green either way and a consumer would bump against
+      # a stale module forever. The only reason this step exists is to publish, so
+      # failing to publish must fail the job. `buf push` errors on its own without
+      # a token; let it.
+      - name: Push to BSR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: buf push
         env:
           BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
