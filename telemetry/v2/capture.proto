@@ -161,14 +161,47 @@ message Frame {
   // non-keyframe pays exactly zero bytes; and where it is true it is two bytes
   // of near-zero entropy through the trained zstd dictionary.
   //
-  // The rule that decides this, recorded here because this is where it was
-  // decided: a frame field costs (fraction of frames non-default) x (compressed
-  // entropy), NOT (width) x (frame rate). These frames are dictionary-
-  // compressed, so two fields of identical width can differ by an order of
-  // magnitude -- an always-zero field is free (the same reasoning already
-  // applied to err_code in echo_arena.proto) while a float that moves every
-  // frame is not. A HEADER field, by contrast, is written once per capture and
-  // costs nothing worth counting; decide those on clarity, not bytes.
+  // WHAT A PER-FRAME FIELD ACTUALLY COSTS. Recorded here because this is where
+  // it was decided, and stated carefully because TWO EARLIER VERSIONS OF THIS
+  // RULE WERE WRONG IN THE SAME DIRECTION: both priced the WIRE.
+  //
+  //   superseded: (width) x (frame rate)
+  //   superseded: (fraction of frames non-default) x (compressed entropy)
+  //
+  // The second is closer and still prices the wrong resource. The stated
+  // constraint is ENCODE CPU ON A MACHINE THAT IS ALSO RUNNING A GAME, and that
+  // is not proportional to bytes on the wire -- it is proportional to proto
+  // marshalling and zstd block flushes. A per-frame field that NEVER CHANGES
+  // still costs a marshal on every single frame while adding almost nothing to
+  // the wire after dictionary compression, and that cost is INVISIBLE to any
+  // bytes-per-second metric.
+  //
+  // So the question to ask of a proposed per-frame field is not "how many
+  // bytes" but: DOES THIS CHANGE BETWEEN FRAMES? The evidence is a change-rate
+  // census (tape pkg/conversion/change_rate_census_bench_test.go @ c453ef7),
+  // not a byte count. This schema already argues that way where it has the
+  // measurement: possession_time rides the frame at 29.4 changes per 100 frames
+  // while the eleven integer counters beside it move 0.6 times per 100 frames
+  // and ride an event instead (echo_arena.proto, PlayerState.possession_time).
+  //
+  // DO NOT PRICE ANYTHING HERE OFF A FRAME RATE. The production capture rate is
+  // UNMEASURED as of 2026-09-07. The figures in circulation are a ceiling and a
+  // rig: "up to 60 Hz" (all-the-way-down projects/nevr-stream.md:25) is a
+  // MAXIMUM, not a rate; tape's frame processor is documented for "up to 600 Hz"
+  // (tape pkg/processing/frame_processor.go:14 @ c453ef7); and the only capture
+  // on hand measured about 2 fps but was written by a container rig that may be
+  // throttled. That spread is ~300x and no production server has been measured.
+  //
+  // is_keyframe passes the change test at ANY rate in that range, and not by
+  // luck: it does not vary with game state at all, it is a deterministic
+  // function of the frame index -- tape emits one every DefaultKeyframeInterval
+  // = 100 frames, counted in FRAMES and not seconds (tape pkg/codec/tape.go:19
+  // and :205 @ c453ef7, `frameIndex%w.keyframeInterval == 0`), so the fraction
+  // is rate-independent. 99 frames in 100 pay exactly zero, at 2 fps and at 600.
+  //
+  // A HEADER field, by contrast, is written once per capture -- and under the
+  // per-block default it is its own block, so growing it recompresses one small
+  // block and touches nothing else. Decide those on clarity, not bytes.
   bool is_keyframe = 3;
 
   // Game-specific frame payloads.
