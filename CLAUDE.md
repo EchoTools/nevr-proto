@@ -21,9 +21,34 @@ nevr-proto is a proto-only repository for the NEVR platform. Protocol Buffer def
 buf lint                                    # Lint proto files
 buf build                                   # Compile check
 buf format --diff --exit-code               # Check formatting
-buf breaking --against '.git#branch=main'   # Check backward compatibility
 buf format -w                               # Auto-fix formatting
+
+./scripts/install-hooks.sh                  # One-time: point git at .githooks/
+./scripts/breaking-gate.sh --target registry            # compat vs the published module
+./scripts/breaking-gate.sh --target '.git#branch=main'  # compat vs local main (PR shape)
 ```
+
+**Run `./scripts/install-hooks.sh` once per clone.** `.git/hooks` is untracked, so
+a hook that lives there is a hook nobody else has; the tracked hooks in
+`.githooks/` do nothing until `core.hooksPath` points at them.
+
+- `pre-commit` — `buf format --diff --exit-code` and `buf lint`. Prints the fix
+  command; never rewrites your working tree.
+- `pre-push` — blocks a push to `main` that breaks compatibility with the
+  published module. It blocks *here* because a push to `main` publishes to a
+  registry other repos fetch, and a follow-up commit cannot un-consume it. Being
+  offline is not a violation: an unreachable registry warns loudly and lets the
+  push through.
+
+A deliberate break is declared on the commit that breaks it:
+
+```bash
+git commit --amend --trailer "Breaking-Approved: <why this is safe now>"
+```
+
+The trailer excuses only its own commit — not the rest of the push — and CI and
+the hook both call `scripts/breaking-gate.sh`, so they cannot disagree about what
+"approved" means.
 
 ## Conventions
 
