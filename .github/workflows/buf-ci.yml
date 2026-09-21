@@ -10,7 +10,13 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+      # The version is pinned because breaking-gate.sh uses --against-registry,
+      # which older buf does not have; unpinned, the action installed one that
+      # failed the gate on every push to main from 2026-09-07, so nothing
+      # published. Keep it at or above the local buf the gate is written for.
       - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          version: "1.73.0"
       - run: buf format --diff --exit-code
       - run: buf lint
       - run: buf build
