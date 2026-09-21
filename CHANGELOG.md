@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `telemetry/v2` `MatchSettingsChanged` event (`EchoEvent.match_settings_changed = 16`, `EVENT_TYPE_MATCH_SETTINGS_CHANGED = 7`): `rules_changed_by`, `rules_changed_at` and `total_round_count` change mid-capture, and the header alone held only their first value
 - `telemetry/v2` layered capture format with game-agnostic envelope, `EchoArenaHeader`/`EchoArenaFrame` payloads, `CaptureFooter` seek indexes, and `EventType` enum
 - `spatial/v1` package with `Vec3`, `Quat`, `Pose` primitives
 - CI: `buf breaking` check on pull requests

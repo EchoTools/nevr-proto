@@ -192,6 +192,8 @@ message EchoArenaHeader {
   string session_id = 1;
   string map_name = 2;
   string client_name = 4;
+  // Number of rounds in the match at the start of the capture. A later change
+  // is a MatchSettingsChanged event.
   int32 total_round_count = 7;
   repeated PlayerInfo initial_roster = 8;
 
@@ -203,8 +205,11 @@ message EchoArenaHeader {
   string session_ip = 10;
 
   // Who last changed the match rules, and when (engine `rules_changed_by` /
-  // `rules_changed_at`). Session-constant: measured invariant across every
-  // frame of 15 sampled captures. Commonly the literal "[INVALID]".
+  // `rules_changed_at`), at the start of the capture. Commonly the literal
+  // "[INVALID]". NOT session-constant: measured changing mid-capture in 3 of 14
+  // real recordings (rules edited in the lobby; `rules_changed_at` then ticks
+  // every frame while the edit is open). A later change is a
+  // MatchSettingsChanged event.
   string rules_changed_by = 11;
   uint64 rules_changed_at = 12;
 
@@ -413,6 +418,7 @@ message EchoEvent {
     RoundEnded round_ended = 13;
     MatchEnded match_ended = 14;
     ScoreboardUpdated scoreboard_updated = 15;
+    MatchSettingsChanged match_settings_changed = 16;
 
     // Player events (20-29)
     PlayerJoined player_joined = 20;
@@ -482,6 +488,17 @@ message ScoreboardUpdated {
   int32 orange_round_score = 4;
   // Display-formatted game clock (e.g., "04:32.1", "OT 1:23").
   string game_clock_display = 5;
+}
+
+// MatchSettingsChanged records a change to a match setting the header holds
+// as its capture-start value: who last changed the rules and when, and the
+// number of rounds. Emitted on the frame where any of them changes, carrying
+// ALL THREE current values -- a snapshot, not a delta -- so the state at frame
+// N is the latest event at or before N, else the header.
+message MatchSettingsChanged {
+  string rules_changed_by = 1;
+  uint64 rules_changed_at = 2;
+  int32 total_round_count = 3;
 }
 
 // Player events ------------------------------------------------------------
