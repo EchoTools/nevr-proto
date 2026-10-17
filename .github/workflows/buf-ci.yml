@@ -15,7 +15,7 @@ jobs:
       # No version: buf-action resolves the latest release. An older pinned or
       # defaulted buf lacked --against-registry and failed the gate on every
       # push to main from 2026-09-07, so nothing published.
-      - uses: bufbuild/buf-action@8c6a16e16f12ba20b6470afa9c2ba9b5ba8c97c3 # v1.5.0
+      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
         with:
           setup_only: true
       - run: buf format --diff --exit-code
