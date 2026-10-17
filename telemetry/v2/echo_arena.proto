@@ -245,6 +245,12 @@ message PlayerInfo {
   int32 jersey_number = 5;
   // Player's XP level (session constant).
   int32 level = 6;
+  // The slot's generation: bumped each time the slot is handed to a new
+  // entrant. (slot, generation) names one occupant; VoiceChunk.generation
+  // carries the same counter, so voice at a slot hand-over is matched to the
+  // right player. Measured equal to the voice header's generation on every
+  // slot carrying both, in one 4v4 production match (6 of 6, incl. a slot at 1).
+  uint32 generation = 7;
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +516,12 @@ message PlayerJoined {
   Role role = 4;
   int32 jersey_number = 5;
   int32 level = 6;
+  // The slot's generation: bumped each time the slot is handed to a new
+  // entrant. (slot, generation) names one occupant; VoiceChunk.generation
+  // carries the same counter, so voice at a slot hand-over is matched to the
+  // right player. Measured equal to the voice header's generation on every
+  // slot carrying both, in one 4v4 production match (6 of 6, incl. a slot at 1).
+  uint32 generation = 7;
 }
 
 message PlayerLeft {

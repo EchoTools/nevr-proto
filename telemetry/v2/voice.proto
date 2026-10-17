@@ -49,4 +49,10 @@ message VoiceChunk {
   // The Opus packets, in sequence order, each exactly as the game sent it
   // with the 6-byte voice header removed. Never decoded by the producer.
   repeated bytes opus = 4;
+
+  // The speaker slot's generation, from the voice header. The same counter as
+  // PlayerInfo.generation and PlayerJoined.generation: match a chunk to its
+  // player by (speaker_slot, generation), never by slot alone, so voice at a
+  // slot hand-over cannot land on the wrong player when the roster lags.
+  uint32 generation = 5;
 }
