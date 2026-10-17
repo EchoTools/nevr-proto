@@ -29,6 +29,8 @@ A capture stream is a sequence of length-delimited `Envelope` messages:
 2. **N `Envelope{frame}`** — `Frame` messages at capture rate (typically 60/s). Each frame carries a sequential index, a millisecond offset from the header timestamp, and a game-specific payload.
 3. **One `Envelope{footer}`** — `CaptureFooter` with frame count, duration, and seek indexes (keyframe + event type).
 
+Interleaved with the frames, in capture order: **`Envelope{voice}`** — `VoiceChunk`, one speaker's consecutive Opus packets (`voice.proto`). A reader that does not want voice skips these.
+
 ### Footer and Seeking
 
 The `CaptureFooter` contains:

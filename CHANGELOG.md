@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `telemetry/v2` `VoiceChunk` (`voice.proto`) and `Envelope.voice = 4`: per-player voice, one speaker's consecutive Opus packets per chunk, with the speaker's slot and its generation, the first packet's sequence and a millisecond offset on the capture's time base
+- `telemetry/v2` `PlayerInfo.generation = 7` and `PlayerJoined.generation = 7`: the slot's generation, so a `VoiceChunk` is matched to its player by (slot, generation) across a slot hand-over
 - `telemetry/v2` `MatchSettingsChanged` event (`EchoEvent.match_settings_changed = 16`, `EVENT_TYPE_MATCH_SETTINGS_CHANGED = 7`): `rules_changed_by`, `rules_changed_at` and `total_round_count` change mid-capture, and the header alone held only their first value
 - `telemetry/v2` layered capture format with game-agnostic envelope, `EchoArenaHeader`/`EchoArenaFrame` payloads, `CaptureFooter` seek indexes, and `EventType` enum
 - `spatial/v1` package with `Vec3`, `Quat`, `Pose` primitives

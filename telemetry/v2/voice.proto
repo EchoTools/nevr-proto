@@ -1,0 +1,58 @@
+/**
+ * Per-player voice for telemetry v2.
+ *
+ * One VoiceChunk is consecutive Opus packets from ONE speaker. Voice is never
+ * mixed: a consumer that wants one player's audio reads that player's chunks.
+ */
+syntax = "proto3";
+
+package telemetry.v2;
+
+option csharp_namespace = "Nevr.Telemetry.V2";
+option go_package = "buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/telemetry/v2;telemetryv2";
+option java_multiple_files = true;
+option java_outer_classname = "VoiceProto";
+option java_package = "com.echotools.nevr.telemetry.v2";
+
+/**
+ * Consecutive voice packets from one speaker.
+ *
+ * The source is the game's SR15NetUserVoipEvent: a 6-byte header
+ * [u16 slot][u16 generation][u16 sequence], then ONE Opus packet, 20 ms of
+ * 48 kHz mono audio (measured on every one of 15,486 server-to-client voice
+ * records of one 4v4 production match; mean payload 46.1 bytes, so about
+ * 16 kbit/s per talking speaker).
+ *
+ * Why an Envelope member and not an EchoEvent or a Frame field: voice records
+ * arrive 1.9x as often as the server's own frame records and about 9x as often
+ * as a 30 Hz telemetry frame. Inside EchoArenaFrame.events they would bloat
+ * every frame and the footer's event index; as their own envelopes, a consumer
+ * that does not want voice skips them and frames keep their rate.
+ *
+ * Packet i of a chunk has sequence first_sequence + i (mod 2^16) and starts at
+ * timestamp_offset_ms + 20 * i. A producer closes a chunk at a sequence gap, so
+ * loss stays visible as a gap between chunks rather than being hidden inside
+ * one.
+ */
+message VoiceChunk {
+  // The speaker's lobby slot, from the voice payload itself; the same slot
+  // space as PlayerState.slot and PlayerInfo.slot.
+  int32 speaker_slot = 1;
+
+  // The voice sequence number of the first packet in this chunk.
+  uint32 first_sequence = 2;
+
+  // Receive time of the first packet, in milliseconds since
+  // CaptureHeader.created_at (the same base as Frame.timestamp_offset_ms).
+  uint32 timestamp_offset_ms = 3;
+
+  // The Opus packets, in sequence order, each exactly as the game sent it
+  // with the 6-byte voice header removed. Never decoded by the producer.
+  repeated bytes opus = 4;
+
+  // The speaker slot's generation, from the voice header. The same counter as
+  // PlayerInfo.generation and PlayerJoined.generation: match a chunk to its
+  // player by (speaker_slot, generation), never by slot alone, so voice at a
+  // slot hand-over cannot land on the wrong player when the roster lags.
+  uint32 generation = 5;
+}

@@ -12,6 +12,7 @@ package telemetry.v2;
 
 import "google/protobuf/timestamp.proto";
 import "telemetry/v2/echo_arena.proto";
+import "telemetry/v2/voice.proto";
 
 option csharp_namespace = "Nevr.Telemetry.V2";
 option go_package = "buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/telemetry/v2;telemetryv2";
@@ -27,6 +28,9 @@ message Envelope {
     CaptureHeader header = 1;
     Frame frame = 2;
     CaptureFooter footer = 3;
+    // One speaker's consecutive voice packets, interleaved with frames in
+    // capture order. See voice.proto.
+    VoiceChunk voice = 4;
   }
 }
 

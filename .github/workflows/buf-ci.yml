@@ -25,11 +25,18 @@ jobs:
       # On a PR the right baseline is main: this compares the PR head against the
       # branch it wants to merge into. It is NOT the right baseline for a push to
       # main -- see the next step for why.
+      #
+      # A PR checkout has the remote-tracking ref origin/<base> but no LOCAL
+      # branch of that name, and the gate's `.git#branch=` target is a file://
+      # clone that only sees local heads ("couldn't find remote ref main"). Make
+      # the local branch from origin/<base> first; the gate itself is unchanged,
+      # so it still fails closed if the clone or the check cannot run.
       - name: Check breaking changes (PR, against main)
         if: github.event_name == 'pull_request'
         run: |
+          git branch --force "${{ github.base_ref }}" "origin/${{ github.base_ref }}"
           ./scripts/breaking-gate.sh \
-            --target '.git#branch=main' \
+            --target '.git#branch=${{ github.base_ref }}' \
             --commits "origin/${{ github.base_ref }}..HEAD"
 
       # THIS CONDITION IS LITERALLY IDENTICAL TO THE PUBLISH STEP'S BELOW, AND
