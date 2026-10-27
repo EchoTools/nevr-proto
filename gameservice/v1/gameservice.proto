@@ -329,6 +329,28 @@ message GameServerRegistrationMessage {
   uint64 version_lock = 6;
   uint32 time_step_usecs = 7;
   string version = 8;
+  // CSymbol64 hashes of the levels this server can load; nakama allocates a match only to a server listing its level.
+  repeated fixed64 installed_levels = 9;
+  // Region codes this server serves; replaces the `regions` URL param.
+  repeated string regions = 10;
+  // Guild ids this server hosts for; replaces the `guilds` URL param.
+  repeated string guilds = 11;
+  // Server tags; replaces the `tags` URL param.
+  repeated string tags = 12;
+  // Features this server supports; replaces the `features` URL param.
+  repeated string features = 13;
+  // Features a client must have to join this server; replaces the `requires` URL param.
+  repeated string requires = 14;
+  // Region used when the client has no region preference; replaces the `default_region` URL param.
+  string default_region = 15;
+  // Geo hash precision (0-12, nakama clamps to that range); replaces the `geo_precision` URL param.
+  int32 geo_precision = 16;
+  // External address of the server, as the client should reach it; replaces the `serveraddr` URL param.
+  string server_address = 17;
+  // Enables all remote logs (nakama's enableAllRemoteLogs); replaces the `debug` URL param.
+  bool debug = 18;
+  // Verbose flag (nakama sets relayOutgoing from it); replaces the `verbose` URL param.
+  bool verbose = 19;
 }
 
 // Registration success message is sent from the service to the server.
