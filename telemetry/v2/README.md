@@ -7,6 +7,7 @@ Game-agnostic capture envelope with game-specific payload extensions.
 ```
 telemetry/v2/capture.proto      # Game-agnostic: Envelope, CaptureHeader, Frame, CaptureFooter
 telemetry/v2/echo_arena.proto   # Echo Arena: EchoArenaHeader, EchoArenaFrame, events, enums
+telemetry/v2/echo_combat.proto  # Echo Combat: EchoCombatHeader, EchoCombatFrame, combat events
 spatial/v1/types.proto           # Shared: Vec3, Quat, Pose primitives
 ```
 

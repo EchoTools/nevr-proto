@@ -1,0 +1,119 @@
+/**
+ * Echo Combat-specific payload definitions for telemetry v2.
+ *
+ * A combat match is typed by CaptureHeader.game_type ("echo_combat",
+ * "echo_combat_private"). Its tape carries the EchoCombatHeader and
+ * EchoCombatFrame messages below, never the EchoArena messages: a combat tape
+ * labelled as an arena tape would mislead every consumer that reads the game
+ * payload.
+ *
+ * Layout policy for this file: a field is named only once its wire layout has
+ * been read from the game. A message whose layout is still unknown is EMPTY and
+ * says RESERVED FOR LATER in its comment. Its fields are added later as new
+ * numbers, which is additive and breaks nothing.
+ */
+syntax = "proto3";
+
+package telemetry.v2;
+
+option csharp_namespace = "Nevr.Telemetry.V2";
+option go_package = "buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/telemetry/v2;telemetryv2";
+option java_multiple_files = true;
+option java_outer_classname = "EchoCombatProto";
+option java_package = "com.echotools.nevr.telemetry.v2";
+
+// ---------------------------------------------------------------------------
+// Session Header
+// ---------------------------------------------------------------------------
+
+/**
+ * Echo Combat session metadata, written once at capture start.
+ *
+ * RESERVED FOR LATER: roster, map and session fields, once the combat header
+ * layout is read. Its presence in the CaptureHeader.game_header oneof already
+ * says the capture is a combat match.
+ */
+message EchoCombatHeader {}
+
+// ---------------------------------------------------------------------------
+// Per-Frame Payload
+// ---------------------------------------------------------------------------
+
+/**
+ * Echo Combat per-frame payload. Carries the combat events that occurred during
+ * this frame. Combat has no per-frame state of its own yet.
+ */
+message EchoCombatFrame {
+  repeated CombatEvent events = 1;
+}
+
+/**
+ * Wrapper for all Echo Combat events.
+ *
+ * Field numbers are local to this envelope, not EchoEvent's ranges: a combat
+ * event never appears inside an EchoEvent, so the two numbering spaces never
+ * meet.
+ */
+message CombatEvent {
+  oneof event {
+    WeaponFired weapon_fired = 10;
+    DamageDealt damage_dealt = 11;
+    PlayerKilled player_killed = 12;
+    PayloadProgress payload_progress = 13;
+    CombatRoundEnded combat_round_ended = 14;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+
+/**
+ * A weapon was fired.
+ *
+ * RESERVED FOR LATER: fields. Source is SR15NetGameFireGun (with its input and
+ * replicate variants). Its wire layout has not been read.
+ */
+message WeaponFired {}
+
+/**
+ * A damageable took damage, as the engine's shield depletion reports it.
+ *
+ * shield_delta is the change in shield carried by the engine's SetCurrentShield
+ * event (a 16-byte payload: u32 state, u32 transition flag, f32 shield delta,
+ * u32 zero). Its field meaning is read from the engine's decompiled code, not
+ * from a capture. The event's name is not yet confirmed.
+ *
+ * RESERVED FOR LATER: the attacker (source) and the damaged player (target).
+ * Their layout has not been read.
+ */
+message DamageDealt {
+  float shield_delta = 1;
+}
+
+/**
+ * A player was killed.
+ *
+ * RESERVED FOR LATER: fields. Source is SR15NetDamageablePlayerKilled. Its wire
+ * layout has not been read.
+ */
+message PlayerKilled {}
+
+/**
+ * Payload (objective) progress.
+ *
+ * RESERVED FOR LATER: fields. Source is the SR15NetPayload* message family. Its
+ * wire layout has not been read, and it is not confirmed that combat maps have
+ * a payload objective. Compare PayloadState in echo_arena.proto, which is the
+ * per-frame state form of the same objective.
+ */
+message PayloadProgress {}
+
+/**
+ * A round ended in a combat match.
+ *
+ * Named CombatRoundEnded because RoundEnded is the arena message in this
+ * package. RESERVED FOR LATER: fields. The combat round graph has not been
+ * analysed, so neither the source nor the layout is known.
+ */
+message CombatRoundEnded {}
