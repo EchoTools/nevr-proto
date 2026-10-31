@@ -12,6 +12,7 @@ package telemetry.v2;
 
 import "google/protobuf/timestamp.proto";
 import "telemetry/v2/echo_arena.proto";
+import "telemetry/v2/echo_combat.proto";
 import "telemetry/v2/voice.proto";
 
 option csharp_namespace = "Nevr.Telemetry.V2";
@@ -232,7 +233,9 @@ message CaptureHeader {
   // Game-specific header payloads.
   oneof game_header {
     EchoArenaHeader echo_arena = 10;
-    // Future game headers: 11-99
+    // Echo Combat session header. See echo_combat.proto.
+    EchoCombatHeader echo_combat = 11;
+    // Future game headers: 12-99
   }
 
   // Core (non-game) header fields continue at 100+, deliberately ABOVE the
@@ -450,7 +453,9 @@ message Frame {
   // Game-specific frame payloads.
   oneof payload {
     EchoArenaFrame echo_arena = 10;
-    // Future game payloads: 11-99
+    // Echo Combat frame payload. See echo_combat.proto.
+    EchoCombatFrame echo_combat = 11;
+    // Future game payloads: 12-99
     // Non-game payloads (annotations, debug): 100-199
   }
 }

@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `telemetry/v2` Echo Combat tapes: `CaptureHeader.echo_combat = 11` (`EchoCombatHeader`) and `Frame.echo_combat = 11` (`EchoCombatFrame`), in `echo_combat.proto`. Combat carries its own messages instead of the arena ones. The event messages `WeaponFired`, `DamageDealt`, `PlayerKilled`, `PayloadProgress` and `CombatRoundEnded` are wrapped in `CombatEvent`. Only `DamageDealt.shield_delta` has a field so far. The rest are empty until their wire layouts are read
+- `telemetry/v2` `EchoCombatFrame` gains the combat /session fields the real files carry: `contested = 2`, `timers = 3` (`CombatTimers`), `payload = 4` (`CombatPayload`), and `players = 5` (`CombatPlayer`, with `playerid` and `arm`)
 - `telemetry/v2` `VoiceChunk` (`voice.proto`) and `Envelope.voice = 4`: per-player voice, one speaker's consecutive Opus packets per chunk, with the speaker's slot and its generation, the first packet's sequence and a millisecond offset on the capture's time base
 - `telemetry/v2` `PlayerInfo.generation = 7` and `PlayerJoined.generation = 7`: the slot's generation, so a `VoiceChunk` is matched to its player by (slot, generation) across a slot hand-over
 - `telemetry/v2` `MatchSettingsChanged` event (`EchoEvent.match_settings_changed = 16`, `EVENT_TYPE_MATCH_SETTINGS_CHANGED = 7`): `rules_changed_by`, `rules_changed_at` and `total_round_count` change mid-capture, and the header alone held only their first value
