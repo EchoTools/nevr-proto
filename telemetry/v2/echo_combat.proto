@@ -128,10 +128,20 @@ message CombatEvent {
 /**
  * A weapon was fired.
  *
- * RESERVED FOR LATER: fields. Source is SR15NetGameFireGun (with its input and
- * replicate variants). Its wire layout has not been read.
+ * Source is SR15NetGameFireGun. Fields are read from the PC handler
+ * FUN_140ce33a0 (echovr.exe 0x140ce33a0) over a 64-byte body (its sender,
+ * fcn.140c59290 at 0x140c59290, stores 0x40 bytes). Only the shooter is named
+ * here. The other body fields (+0x00, +0x04, +0x14, +0x24, +0x2C, +0x30, +0x38)
+ * are read but not yet named, and are RESERVED FOR LATER.
  */
-message WeaponFired {}
+message WeaponFired {
+  // The shooter's player slot: the low 16 bits of the body's u32 player handle
+  // at +0x34 (roster index). The handle's shape is read from the handle check
+  // at 0x140d09eb0. That the handle names the shooter is [D], not [V].
+  int32 player_slot = 1;
+  // The shooter's generation: the high 16 bits of the same handle.
+  int32 player_generation = 2;
+}
 
 /**
  * A damageable took damage, as the engine's shield depletion reports it.
@@ -151,10 +161,20 @@ message DamageDealt {
 /**
  * A player was killed.
  *
- * RESERVED FOR LATER: fields. Source is SR15NetDamageablePlayerKilled. Its wire
- * layout has not been read.
+ * Source is SR15NetDamageablePlayerKilled, sent by ProcessDamageServer
+ * (echovr.exe 0x140d29770) through the sender at 0x140c565b0, a 24-byte body:
+ * +0x00 u64 victim object id, +0x08 u64 (unnamed), +0x10 u32 (unnamed),
+ * +0x14 u32 player handle. Only the victim is named here, and the body carries
+ * no attacker field. The victim's handle is [D]: it is the damaged record's
+ * handle at ProcessDamageServer's +0x04.
  */
-message PlayerKilled {}
+message PlayerKilled {
+  // The victim's player slot: the low 16 bits of the body's u32 player handle
+  // at +0x14 (roster index).
+  int32 victim_player_slot = 1;
+  // The victim's generation: the high 16 bits of the same handle.
+  int32 victim_player_generation = 2;
+}
 
 /**
  * Payload (objective) progress.
