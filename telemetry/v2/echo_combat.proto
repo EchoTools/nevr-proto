@@ -41,10 +41,67 @@ message EchoCombatHeader {}
 
 /**
  * Echo Combat per-frame payload. Carries the combat events that occurred during
- * this frame. Combat has no per-frame state of its own yet.
+ * this frame, and the per-frame state the real combat /session files carry.
  */
 message EchoCombatFrame {
   repeated CombatEvent events = 1;
+
+  // The `contested` flag from the combat /session object. Boolean in the real
+  // files.
+  bool contested = 2;
+
+  // Game timers. Present on payload maps only (Fission, Gauss).
+  CombatTimers timers = 3;
+
+  // Payload objective state. Present on payload maps only (Fission, Gauss).
+  CombatPayload payload = 4;
+
+  // Per-player combat state, one entry per player.
+  repeated CombatPlayer players = 5;
+}
+
+/**
+ * Game timers from the combat /session `timers` object.
+ *
+ * Both are JSON numbers in the real files. They are typed double, the one
+ * numeric type that represents every JSON number exactly, because the real
+ * files do not show whether the engine writes them as integers or as reals.
+ */
+message CombatTimers {
+  double game_timer = 1;
+  double overtime_timer = 2;
+}
+
+/**
+ * Payload objective state from the combat /session `payload` object.
+ *
+ * These are the two fields the payload object carries that PayloadState
+ * (echo_arena.proto) does not. The other payload children (checkpoint,
+ * distance, speed, defenders, multiplier) are not in this message yet.
+ *
+ * Numeric fields are typed double for the same reason as CombatTimers.
+ */
+message CombatPayload {
+  // Number of attackers on the payload.
+  double attackers = 1;
+  // Payload position. The real files show an array of three numbers.
+  repeated double pos = 2;
+}
+
+/**
+ * One player's combat state from the combat /session `teams[].players[]`
+ * object.
+ *
+ * The real files nest players under teams. They are flattened here into
+ * EchoCombatFrame.players, keyed by playerid. Only the two fields below are
+ * defined. The other per-player reads (userid, name, ping, and so on) are
+ * not in this message yet.
+ */
+message CombatPlayer {
+  // Player identifier, the key for this entry.
+  double playerid = 1;
+  // The player's arm. The real files show a string.
+  string arm = 2;
 }
 
 /**
