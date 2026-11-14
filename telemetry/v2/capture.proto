@@ -4,7 +4,8 @@
  * The core format is game-agnostic and carries timing/file structure.
  * Game-specific payloads are attached through oneof extension points.
  *
- * A capture stream consists of: one header, many frames, and one footer.
+ * A capture stream consists of: one header, many frames, and one footer, with
+ * voice chunks and native record batches interleaved in capture order.
  */
 syntax = "proto3";
 
@@ -13,6 +14,7 @@ package telemetry.v2;
 import "google/protobuf/timestamp.proto";
 import "telemetry/v2/echo_arena.proto";
 import "telemetry/v2/echo_combat.proto";
+import "telemetry/v2/native.proto";
 import "telemetry/v2/voice.proto";
 
 option csharp_namespace = "Nevr.Telemetry.V2";
@@ -32,6 +34,11 @@ message Envelope {
     // One speaker's consecutive voice packets, interleaved with frames in
     // capture order. See voice.proto.
     VoiceChunk voice = 4;
+    // A batch of native engine records, interleaved in capture order. See
+    // native.proto. A reader whose schema predates this member sees an
+    // Envelope with no known case set and the batch in its unknown fields. It
+    // must report that envelope as unrecognized, never count it as understood.
+    NativeBatch native_batch = 5;
   }
 }
 
@@ -71,6 +78,12 @@ message CaptureHeader {
   // Why not MAJOR 3: `3` already has a planned meaning (v2 as archival bridge,
   // v3 as engine-native) in an open architecture decision, and taking the number
   // here would collide with a decision that has not been made.
+  //
+  // RECONCILED 2026-11-14: that decision has been made, and it is NOT v3. The
+  // owner's capture contract puts engine-native records in canonical v2,
+  // additively (Envelope.native_batch, CaptureHeader.native_time_unit_ns), with
+  // format_version still 2. "v3 as engine-native" above is history, not a plan.
+  // A new major is for a deliberate incompatible change, not for additions.
   uint32 format_minor = 5;
   uint32 format_patch = 6;
 
@@ -363,6 +376,20 @@ message CaptureHeader {
   // code agrees: its idle interval is INITIALISED to the active interval and
   // only replaced when throttling is configured (poller.go:106-109).
   uint32 idle_frame_rate_hz = 102;
+
+  // The unit of NativeRecord.elapsed, in nanoseconds. 1000 means microseconds,
+  // which is what a native producer writes.
+  //
+  // IT SCALES NATIVE RECORDS ONLY. Frame.timestamp_offset_ms,
+  // VoiceChunk.timestamp_offset_ms and CaptureFooter.duration_ms stay
+  // milliseconds whatever this says. The prefix is in the name so nobody reads
+  // it as rescaling them.
+  //
+  // REQUIRED, nonzero, on any capture carrying an Envelope.native_batch. Absent
+  // (0) on a telemetry-only capture, which is normal and no reason to reject it.
+  // A reader that meets native records with 0 here rejects the native records,
+  // not the capture, because their elapsed values have no unit.
+  uint32 native_time_unit_ns = 103;
 
   // 900-999 ARE RESERVED AND MUST NEVER BE ASSIGNED. They are not a future
   // range; they are a permanently empty one, and that is their entire purpose.

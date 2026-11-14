@@ -1,0 +1,176 @@
+/**
+ * Native engine records for telemetry v2.
+ *
+ * A NativeBatch carries records exactly as the server observed them at its
+ * native message boundary: each keeps its native type and bytes, a
+ * session-global capture sequence, and its elapsed capture time. It rides the
+ * capture stream as Envelope.native_batch, interleaved with frames and voice in
+ * capture order.
+ *
+ * Native records do not replace telemetry frames. A capture may carry either or
+ * both. Their two timelines are NOT declared to share a clock here: elapsed is
+ * in CaptureHeader.native_time_unit_ns units from the native capture origin,
+ * while Frame.timestamp_offset_ms stays milliseconds from created_at. A consumer
+ * must not merge the two, or apply both as state updates, until a capture
+ * declares their mapping.
+ */
+syntax = "proto3";
+
+package telemetry.v2;
+
+option csharp_namespace = "Nevr.Telemetry.V2";
+option go_package = "buf.build/gen/go/echotools/nevr-api/protocolbuffers/go/telemetry/v2;telemetryv2";
+option java_multiple_files = true;
+option java_outer_classname = "NativeProto";
+option java_package = "com.echotools.nevr.telemetry.v2";
+
+/**
+ * A batch of native records and sequence dispositions.
+ *
+ * ROWS, NOT COLUMNS. A columnar layout is adopted only after it is measured
+ * against this equivalent simple one. If it wins, it takes a new field number
+ * here or a new Envelope member, and this layout keeps its numbers.
+ *
+ * RULES A READER CHECKS, because protobuf cannot:
+ *
+ *  - An empty batch, with no record and no disposition, is MALFORMED. A writer
+ *    never emits one.
+ *  - Within each list, sequences are strictly increasing. Records across
+ *    batches are in sequence order. A disposition may arrive in a LATER batch
+ *    than records with higher sequences, because a loss can be discovered
+ *    after later observations were flushed.
+ *  - Across the whole capture, every accounted sequence appears exactly once:
+ *    as one stored record, or inside exactly one disposition. A record never
+ *    falls inside a disposition, and two dispositions never overlap.
+ *  - Order between records and dispositions in one batch is by sequence, not
+ *    by which list they are in.
+ */
+message NativeBatch {
+  repeated NativeRecord records = 1;
+  repeated NativeSequenceDisposition dispositions = 2;
+}
+
+/**
+ * One native observation, kept exactly as the server saw it.
+ */
+message NativeRecord {
+  // Session-global capture sequence. It orders every accounted observation, and
+  // decides order when elapsed ties.
+  //
+  // 0 IS INVALID and never assigned, because proto3 cannot tell an unset 0 from
+  // a written one. The first observation of a capture is 1, and each later one
+  // is greater than the last. It NEVER WRAPS: a producer that would pass
+  // 2^64-1 stops capturing instead, and a reader rejects a 0, duplicate or
+  // decreasing sequence.
+  //
+  // A capture is one sequence epoch. A producer that restarts begins a new
+  // capture (a new CaptureHeader.capture_id) unless it explicitly restores its
+  // sequence and clock state.
+  uint64 sequence = 1;
+
+  // Elapsed capture time, in CaptureHeader.native_time_unit_ns units, since the
+  // producer's monotonic capture origin. Non-decreasing in sequence order.
+  // Equal values are normal, and sequence orders them.
+  //
+  // This is CAPTURE time, when the observation was made. It is not a source
+  // packet timestamp, an engine tick time or a wall-clock time. Where replay
+  // needs the engine's time, that is recorded separately and never
+  // reconstructed from this.
+  uint64 elapsed = 2;
+
+  // Which boundary observed the record. This says what the record PROVES. An
+  // EMITTED record proves an encode, not delivery or client application.
+  NativeStage stage = 3;
+
+  // The native message type: the engine's 64-bit symbol hash, as the codec
+  // reads and writes it.
+  //
+  // fixed64 because symbol hashes spread over all 64 bits, where a varint takes
+  // up to 10 bytes and fixed64 a flat 8. This is the same choice gameservice/v1
+  // makes for SymbolId hashes.
+  fixed64 msg_type = 4;
+
+  // The native mailbox the record travelled on, verbatim. The server's
+  // reliable lane is mailbox 0xFFFFFFFFFFFFFFFF, so the mailbox also names the
+  // lane. fixed64 because the values are mostly hash-like keys or u64::MAX
+  // (8 bytes, where a varint would take up to 10). Small values pay a little
+  // extra.
+  fixed64 mailbox = 5;
+
+  // The connection at the far end of this record: the SOURCE for INPUT, the
+  // DESTINATION for EMITTED. Recorded by the producer from its own routing
+  // state, never inferred from the payload bytes.
+  //
+  // This is the server's CONNECTION identity (nevr-server-rs PeerConnectionId:
+  // index plus generation), not a roster slot. It covers spectators and
+  // connections that never joined a slot, which a slot cannot.
+  //
+  // OPTIONAL, because index 0 and generation 0 are real values: a written 0 is
+  // connection 0, and absence means the record has no peer. Both are set on
+  // every INPUT and EMITTED record. A stage without a peer leaves both unset.
+  optional uint64 connection_index = 6;
+
+  // The generation of connection_index at observation time.
+  // (connection_index, connection_epoch) names one connection, so a reconnect
+  // or a reused index cannot retarget an old record.
+  optional uint64 connection_epoch = 7;
+
+  // The exact native payload bytes, never decoded or re-encoded by the producer.
+  // For EMITTED, the application body passed to the encoder, not the resulting
+  // transport datagram. May be empty: an empty payload is a valid native
+  // message.
+  bytes payload = 8;
+
+  // Optional causal references: the sequences of EARLIER records in this capture
+  // that caused this one, for example the INPUT an EMITTED reply answers. Each
+  // must be less than this record's sequence. A reader validates every
+  // reference before following it.
+  repeated uint64 causes = 9;
+}
+
+/**
+ * The fate of a contiguous range of observation sequences that are not stored
+ * as records.
+ *
+ * It covers sequences the producer ALREADY ALLOCATED. It never allocates new
+ * ones, so a loss is accounted where the observations would have been.
+ */
+message NativeSequenceDisposition {
+  // The first sequence covered. Nonzero, by NativeRecord.sequence's rule.
+  uint64 first_sequence = 1;
+
+  // How many consecutive sequences are covered, from first_sequence. At least
+  // 1, and first_sequence + count - 1 must not overflow uint64. A reader
+  // rejects either violation before using the range.
+  uint64 count = 2;
+
+  NativeDispositionReason reason = 3;
+
+  // The stage the covered observations belonged to, when every one of them is
+  // known to belong to it. UNSPECIFIED when the producer cannot say.
+  NativeStage stage = 4;
+}
+
+// The boundary at which a native record was observed. Values are added, never
+// renumbered. TICK and HANDOFF_REFUSED, named in the capture design, take new
+// values when their records are defined.
+enum NativeStage {
+  NATIVE_STAGE_UNSPECIFIED = 0;
+  // An authoritative input the server ACCEPTED at its serialized session
+  // boundary, recorded before it was applied.
+  NATIVE_STAGE_INPUT = 1;
+  // A message the server ENCODED for a destination peer. Not proof of delivery.
+  NATIVE_STAGE_EMITTED = 2;
+}
+
+// Why sequences are covered by a disposition instead of stored records.
+enum NativeDispositionReason {
+  NATIVE_DISPOSITION_REASON_UNSPECIFIED = 0;
+  // Deliberately not stored, for example by a filter. The observations
+  // happened. The capture states it chose not to keep them.
+  NATIVE_DISPOSITION_REASON_OMITTED = 1;
+  // Allocated but not stored, against the producer's intent, for example after
+  // queue overflow. A capture with any LOST range is not complete for those
+  // observations.
+  NATIVE_DISPOSITION_REASON_LOST = 2;
+}

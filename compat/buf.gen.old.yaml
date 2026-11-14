@@ -1,0 +1,18 @@
+# Generates the OLD schema's Go code for compat/oldreader, under this module's
+# own import path, so the old reader never links the new generated code and
+# the two never meet in one protobuf registry. Run by scripts/compat-test.sh.
+version: v2
+
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/EchoTools/nevr-proto/compat/internal/oldgen
+
+plugins:
+  # Same plugin and API level as buf.gen.yaml, so "old" differs only in schema.
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    out: compat/internal/oldgen
+    opt:
+      - default_api_level=API_HYBRID
+      - module=github.com/EchoTools/nevr-proto/compat/internal/oldgen

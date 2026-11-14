@@ -26,6 +26,7 @@ buf format -w                               # Auto-fix formatting
 ./scripts/install-hooks.sh                  # One-time: point git at .githooks/
 ./scripts/breaking-gate.sh --target registry            # compat vs the published module
 ./scripts/breaking-gate.sh --target '.git#branch=main'  # compat vs local main (PR shape)
+./scripts/compat-test.sh                                # old reader (pre-native schema's generated Go) vs new wire vectors
 ```
 
 **Run `./scripts/install-hooks.sh` once per clone.** `.git/hooks` is untracked, so

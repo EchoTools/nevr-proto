@@ -8,6 +8,8 @@ Game-agnostic capture envelope with game-specific payload extensions.
 telemetry/v2/capture.proto      # Game-agnostic: Envelope, CaptureHeader, Frame, CaptureFooter
 telemetry/v2/echo_arena.proto   # Echo Arena: EchoArenaHeader, EchoArenaFrame, events, enums
 telemetry/v2/echo_combat.proto  # Echo Combat: EchoCombatHeader, EchoCombatFrame, combat events
+telemetry/v2/voice.proto        # VoiceChunk: one speaker's Opus packets
+telemetry/v2/native.proto       # NativeBatch: native engine records, sequence dispositions
 spatial/v1/types.proto           # Shared: Vec3, Quat, Pose primitives
 ```
 
@@ -31,6 +33,8 @@ A capture stream is a sequence of length-delimited `Envelope` messages:
 3. **One `Envelope{footer}`** — `CaptureFooter` with frame count, duration, and seek indexes (keyframe + event type).
 
 Interleaved with the frames, in capture order: **`Envelope{voice}`** — `VoiceChunk`, one speaker's consecutive Opus packets (`voice.proto`). A reader that does not want voice skips these.
+
+Also interleaved, in capture order: **`Envelope{native_batch}`** — `NativeBatch` (`native.proto`), the server's native engine records with their exact bytes, a session-global capture sequence and elapsed time in `CaptureHeader.native_time_unit_ns` units. A reader whose schema predates `native_batch` gets an envelope with no known case set and the batch in its unknown fields, and must report it as unrecognized rather than skip it silently. `./scripts/compat-test.sh` proves that against code generated from the last schema before `native_batch`.
 
 ### Footer and Seeking
 
